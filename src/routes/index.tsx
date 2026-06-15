@@ -28,10 +28,7 @@ export const Route = createFileRoute("/")({
 
 const OPS_RMS = ["Vishwajeet", "Shruti"];
 const inr = (n: number) =>
-  n === 0
-    ? "—"
-    : "₹" +
-      new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
+  n === 0 ? "—" : "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
 
 function daysUntil(dateStr: string): number | null {
   if (!dateStr) return null;
@@ -59,6 +56,21 @@ function getPaymentUrgencyColor(freeCancellationDate: string, travelDate: string
 function isFullyCollected(b: Booking) {
   return b.paymentCollected.toLowerCase() === "yes" || b.pendingAmount <= 0;
 }
+
+function releaseRemark(b: Booking): string | null {
+  if (isFullyCollected(b)) return null;
+  const days = daysUntil(b.freeCancellationDate);
+  if (days === null) return null;
+  if (days < 0) return "Free cancellation date passed — kindly release now";
+  if (days === 0) return "Kindly release today if payment not done";
+  return `Kindly release if not done in ${days} day${days === 1 ? "" : "s"}`;
+}
+
+const YES_NO = ["Yes", "No"];
+const VOUCHER_OPTS = ["", "Shared", "Not Shared", "Not Applicable"];
+const INST_STATUS = ["", "Received", "Pending", "Not Applicable"];
+const DISCREPANCY_OPTS = ["", "Equal", "Less", "More"];
+const MATRICS_OPTS = ["", "Past", "Future"];
 
 function Dashboard() {
   const fn = useServerFn(fetchBookings);
@@ -118,7 +130,8 @@ function Dashboard() {
         if (daysFilter === "31-90" && !(d >= 31 && d <= 90)) return false;
         if (daysFilter === "gt90" && !(d > 90)) return false;
       }
-      if (hideDropped && b.tripStatus && b.tripStatus.toLowerCase().includes("dropped")) return false;
+      if (hideDropped && b.tripStatus && b.tripStatus.toLowerCase().includes("dropped"))
+        return false;
       if (tab === "payment" && isFullyCollected(b)) return false;
       if (tab === "voucher" && b.finalVoucher.toLowerCase() === "shared") return false;
       if (tab === "upcoming") {
@@ -169,7 +182,8 @@ function Dashboard() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowNewBookingForm(true)}
-              className="rounded-md bg-emerald-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700">
+              className="rounded-md bg-emerald-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
+            >
               + New booking
             </button>
             <button
@@ -209,9 +223,24 @@ function Dashboard() {
               placeholder="Search name, PN, destination…"
               className="h-9 min-w-[220px] flex-1 rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500"
             />
-            <Select value={destination} onChange={setDestination} placeholder="All destinations" options={destinations} />
-            <Select value={seller} onChange={setSeller} placeholder="All sellers" options={sellers} />
-            <Select value={opsRm} onChange={setOpsRm} placeholder="All Ops RM" options={["Unassigned", ...OPS_RMS]} />
+            <Select
+              value={destination}
+              onChange={setDestination}
+              placeholder="All destinations"
+              options={destinations}
+            />
+            <Select
+              value={seller}
+              onChange={setSeller}
+              placeholder="All sellers"
+              options={sellers}
+            />
+            <Select
+              value={opsRm}
+              onChange={setOpsRm}
+              placeholder="All Ops RM"
+              options={["Unassigned", ...OPS_RMS]}
+            />
             <Select
               value={paymentStatus}
               onChange={setPaymentStatus}
@@ -258,12 +287,14 @@ function Dashboard() {
         {/* Tabs */}
         <section className="mt-5 border-b border-slate-200">
           <div className="flex flex-wrap gap-1">
-            {([
-              ["all", "All bookings"],
-              ["payment", "Payment tracker"],
-              ["voucher", "Voucher status"],
-              ["upcoming", "Upcoming trips"],
-            ] as const).map(([k, label]) => (
+            {(
+              [
+                ["all", "All bookings"],
+                ["payment", "Payment tracker"],
+                ["voucher", "Voucher status"],
+                ["upcoming", "Upcoming trips"],
+              ] as const
+            ).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
@@ -285,8 +316,23 @@ function Dashboard() {
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 {[
-                  "PN","Lead pax","Destination","Travel","Days","Pax","Seller","Ops RM",
-                  "Flight SP","Hotel SP","Land SP","Visa SP","Final TTV","Total SP","Payment","Pending","Status",
+                  "PN",
+                  "Lead pax",
+                  "Destination",
+                  "Travel",
+                  "Days",
+                  "Pax",
+                  "Seller",
+                  "Ops RM",
+                  "Flight SP",
+                  "Hotel SP",
+                  "Land SP",
+                  "Visa SP",
+                  "Final TTV",
+                  "Total SP",
+                  "Payment",
+                  "Pending",
+                  "Status",
                   ...(tab === "payment" ? ["Urgent"] : []),
                 ].map((h) => (
                   <th key={h} className="whitespace-nowrap px-3 py-3 font-semibold">
@@ -314,7 +360,10 @@ function Dashboard() {
                   return (
                     <tr key={`${b.pn || "row"}-${index}`} className="hover:bg-slate-50/60">
                       {(() => {
-                        const urgencyColor = tab === "payment" ? getPaymentUrgencyColor(b.freeCancellationDate, b.travelDate) : null;
+                        const urgencyColor =
+                          tab === "payment"
+                            ? getPaymentUrgencyColor(b.freeCancellationDate, b.travelDate)
+                            : null;
                         return (
                           <td className={`whitespace-nowrap px-3 py-2.5 ${urgencyColor || ""}`}>
                             <button
@@ -332,7 +381,9 @@ function Dashboard() {
                           {b.destination || "—"}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{b.travelDate || "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
+                        {b.travelDate || "—"}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-2.5">
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
                           {b.matrics?.toLowerCase() || "—"}
@@ -341,22 +392,34 @@ function Dashboard() {
                       <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
                         {b.adult}/{b.child}/{b.infant}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{b.seller || "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
+                        {b.seller || "—"}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-2.5">
                         <OpsRmSelect value={b.opsRm} />
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{inr(b.flightSp)}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{inr(b.hotelSp)}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{inr(b.landSp)}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{inr(b.visaSp)}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{inr(b.finalTtv)}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-900">{inr(b.totalSp)}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
+                        {inr(b.flightSp)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
+                        {inr(b.hotelSp)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
+                        {inr(b.landSp)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
+                        {inr(b.visaSp)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
+                        {inr(b.finalTtv)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-900">
+                        {inr(b.totalSp)}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-2.5">
                         <span
                           className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                            full
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-amber-50 text-amber-700"
+                            full ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
                           }`}
                         >
                           {full ? "Full" : "Pending"}
@@ -365,37 +428,47 @@ function Dashboard() {
                       <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
                         {b.pendingAmount > 0 ? inr(b.pendingAmount) : "—"}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">{b.preTrip || "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">
+                        {b.preTrip || "—"}
+                      </td>
                       {tab === "payment" && (
                         <td className="whitespace-nowrap px-3 py-2.5">
-                          {b.freeCancellationDate ? (
-                            (() => {
-                              const days = daysUntil(b.freeCancellationDate);
-                              let badgeClass = "";
-                              let label = "";
-                              if (days !== null) {
-                                if (days <= 3) {
-                                  badgeClass = "bg-red-100 text-red-800";
-                                  label = `${days}d - URGENT`;
-                                } else if (days <= 6) {
-                                  badgeClass = "bg-orange-100 text-orange-800";
-                                  label = `${days}d - HIGH`;
-                                } else if (days >= 7) {
-                                  badgeClass = "bg-pink-100 text-pink-800";
-                                  label = `${days}d - MEDIUM`;
+                          {b.freeCancellationDate
+                            ? (() => {
+                                const days = daysUntil(b.freeCancellationDate);
+                                let badgeClass = "";
+                                let label = "";
+                                if (days !== null) {
+                                  if (days <= 3) {
+                                    badgeClass = "bg-red-100 text-red-800";
+                                    label = `${days}d - URGENT`;
+                                  } else if (days <= 6) {
+                                    badgeClass = "bg-orange-100 text-orange-800";
+                                    label = `${days}d - HIGH`;
+                                  } else if (days >= 7) {
+                                    badgeClass = "bg-pink-100 text-pink-800";
+                                    label = `${days}d - MEDIUM`;
+                                  }
                                 }
-                              }
-                              return badgeClass ? (
-                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${badgeClass}`}>
-                                  {label}
-                                </span>
-                              ) : (
-                                "—"
-                              );
-                            })()
-                          ) : (
-                            "—"
-                          )}
+                                const remark = releaseRemark(b);
+                                return badgeClass ? (
+                                  <div className="flex flex-col gap-1">
+                                    <span
+                                      className={`inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-semibold ${badgeClass}`}
+                                    >
+                                      {label}
+                                    </span>
+                                    {remark ? (
+                                      <span className="text-xs font-medium text-red-600">
+                                        {remark}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  "—"
+                                );
+                              })()
+                            : "—"}
                         </td>
                       )}
                     </tr>
@@ -416,7 +489,12 @@ function Dashboard() {
           <DialogHeader>
             <DialogTitle>Add New Booking</DialogTitle>
           </DialogHeader>
-          <NewBookingForm onSuccess={() => { setShowNewBookingForm(false); refetch(); }} />
+          <NewBookingForm
+            onSuccess={() => {
+              setShowNewBookingForm(false);
+              refetch();
+            }}
+          />
         </DialogContent>
       </Dialog>
 
@@ -425,7 +503,9 @@ function Dashboard() {
           <DialogHeader>
             <DialogTitle>Booking Details — PN {selectedBooking?.pn}</DialogTitle>
           </DialogHeader>
-          {selectedBooking && <BookingDetailView booking={selectedBooking} inr={inr} />}
+          {selectedBooking && (
+            <BookingDetailView key={selectedBooking.pn} booking={selectedBooking} />
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -492,7 +572,12 @@ function OpsRmSelect({ value }: { value: string }) {
 }
 
 function NewBookingForm({ onSuccess }: { onSuccess: () => void }) {
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<Partial<Booking>>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<Partial<Booking>>({
     defaultValues: {
       adult: 1,
       child: 0,
@@ -582,80 +667,249 @@ function NewBookingForm({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function BookingDetailView({ booking, inr }: { booking: Booking; inr: (n: number) => string }) {
-  const DetailRow = ({
+type FieldType = "text" | "number" | "select";
+
+function EditField({
+  value,
+  type = "text",
+  options,
+  onChange,
+}: {
+  value: string;
+  type?: FieldType;
+  options?: string[];
+  onChange: (v: string) => void;
+}) {
+  const base =
+    "w-44 rounded-md border border-transparent bg-transparent px-2 py-1 text-right text-sm font-semibold text-slate-900 outline-none transition hover:border-slate-200 hover:bg-slate-50 focus:border-emerald-500 focus:bg-white";
+  if (type === "select") {
+    return (
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${base} cursor-pointer appearance-none`}
+      >
+        {(options ?? []).map((o) => (
+          <option key={o} value={o}>
+            {o === "" ? "—" : o}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <input
+      type={type === "number" ? "number" : "text"}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={base}
+    />
+  );
+}
+
+function SectionHeader({ label, className }: { label: string; className: string }) {
+  return (
+    <div className={`${className} px-4 py-3 border-b border-t border-slate-200 mt-4`}>
+      <div className="text-sm text-slate-600">{label}</div>
+    </div>
+  );
+}
+
+function BookingDetailView({ booking }: { booking: Booking }) {
+  const [edited, setEdited] = useState<Booking>(booking);
+  const [dirty, setDirty] = useState(false);
+
+  const set = <K extends keyof Booking>(key: K, value: Booking[K]) => {
+    setEdited((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+  const setInst = (i: number, key: "dueDate" | "amount" | "status", value: string | number) => {
+    setEdited((prev) => {
+      const installments = prev.installments.map((inst, idx) =>
+        idx === i ? { ...inst, [key]: value } : inst,
+      );
+      return { ...prev, installments };
+    });
+    setDirty(true);
+  };
+
+  const Row = ({
     label,
-    value,
+    field,
+    type = "text",
+    options,
     highlight,
   }: {
     label: string;
-    value: string | number;
+    field: keyof Booking;
+    type?: FieldType;
+    options?: string[];
     highlight?: boolean;
   }) => (
-    <div className={`py-3 px-4 border-b border-slate-100 flex justify-between items-center ${highlight ? "bg-slate-50" : ""}`}>
+    <div
+      className={`py-1.5 px-4 border-b border-slate-100 flex justify-between items-center gap-3 ${highlight ? "bg-slate-50" : ""}`}
+    >
       <span className="text-sm font-medium text-slate-600">{label}</span>
-      <span className={`text-sm font-semibold ${highlight ? "text-emerald-700" : "text-slate-900"}`}>
-        {value}
-      </span>
+      <EditField
+        value={String(edited[field] ?? "")}
+        type={type}
+        options={options}
+        onChange={(v) =>
+          set(field, (type === "number" ? Number(v || 0) : v) as Booking[typeof field])
+        }
+      />
     </div>
   );
 
+  const InstRow = ({
+    i,
+    field,
+    label,
+    type = "text",
+    options,
+  }: {
+    i: number;
+    field: "dueDate" | "amount" | "status";
+    label: string;
+    type?: FieldType;
+    options?: string[];
+  }) => (
+    <div className="py-1.5 px-4 border-b border-slate-100 flex justify-between items-center gap-3">
+      <span className="text-sm font-medium text-slate-600">{label}</span>
+      <EditField
+        value={String(edited.installments[i]?.[field] ?? "")}
+        type={type}
+        options={options}
+        onChange={(v) => setInst(i, field, type === "number" ? Number(v || 0) : v)}
+      />
+    </div>
+  );
+
+  const remark = releaseRemark(edited);
+
   return (
     <div className="rounded-lg bg-white border border-slate-200">
-      <div className="bg-emerald-50 px-4 py-3 border-b border-slate-200">
+      <div className="flex items-center justify-between bg-emerald-50 px-4 py-3 border-b border-slate-200">
         <div className="text-sm text-slate-600">Booking Information</div>
+        <span className="text-xs font-medium text-slate-400">
+          {dirty ? "Edited — not saved to sheet" : "Click any value to edit"}
+        </span>
       </div>
       <div>
-        <DetailRow label="PN" value={booking.pn} highlight />
-        <DetailRow label="Lead Pax" value={booking.leadPax} />
-        <DetailRow label="Destination" value={booking.destination} />
-        <DetailRow label="Travel Date" value={booking.travelDate || "—"} />
-        <DetailRow label="Days to Travel" value={booking.daysToTravel || "—"} />
+        {Row({ label: "PN", field: "pn", highlight: true })}
+        {Row({ label: "Lead Pax", field: "leadPax" })}
+        {Row({ label: "Destination", field: "destination" })}
+        {Row({ label: "Travel Date", field: "travelDate" })}
+        {Row({ label: "Days to Travel", field: "daysToTravel" })}
       </div>
 
-      <div className="bg-blue-50 px-4 py-3 border-b border-t border-slate-200 mt-4">
-        <div className="text-sm text-slate-600">Passengers</div>
-      </div>
+      <SectionHeader label="Passengers" className="bg-blue-50" />
       <div>
-        <DetailRow label="Adults" value={booking.adult} />
-        <DetailRow label="Children" value={booking.child} />
-        <DetailRow label="Infants" value={booking.infant} />
-        <DetailRow label="Matrics" value={booking.matrics || "—"} />
+        {Row({ label: "Adults", field: "adult", type: "number" })}
+        {Row({ label: "Children", field: "child", type: "number" })}
+        {Row({ label: "Infants", field: "infant", type: "number" })}
+        {Row({ label: "Matrics", field: "matrics", type: "select", options: MATRICS_OPTS })}
       </div>
 
-      <div className="bg-purple-50 px-4 py-3 border-b border-t border-slate-200 mt-4">
-        <div className="text-sm text-slate-600">Seller & Operations</div>
-      </div>
+      <SectionHeader label="Seller & Operations" className="bg-purple-50" />
       <div>
-        <DetailRow label="Seller" value={booking.seller || "—"} />
-        <DetailRow label="Ops RM" value={booking.opsRm || "Unassigned"} />
+        {Row({ label: "Seller", field: "seller" })}
+        {Row({ label: "Ops RM", field: "opsRm", type: "select", options: ["", ...OPS_RMS] })}
       </div>
 
-      <div className="bg-amber-50 px-4 py-3 border-b border-t border-slate-200 mt-4">
-        <div className="text-sm text-slate-600">Pricing & Payment</div>
-      </div>
+      <SectionHeader label="Pricing & Payment" className="bg-amber-50" />
       <div>
-        <DetailRow label="Flight SP" value={inr(booking.flightSp)} />
-        <DetailRow label="Hotel SP" value={inr(booking.hotelSp)} />
-        <DetailRow label="Land SP" value={inr(booking.landSp)} />
-        <DetailRow label="Visa SP" value={inr(booking.visaSp)} />
-        <DetailRow label="Total SP" value={inr(booking.totalSp)} />
-        <DetailRow label="Final TTV" value={inr(booking.finalTtv)} highlight />
-        <DetailRow label="Payment Collected" value={booking.paymentCollected} />
-        <DetailRow label="Pending Amount" value={inr(booking.pendingAmount)} highlight={booking.pendingAmount > 0} />
+        {Row({ label: "Flight SP", field: "flightSp", type: "number" })}
+        {Row({ label: "Hotel SP", field: "hotelSp", type: "number" })}
+        {Row({ label: "Land SP", field: "landSp", type: "number" })}
+        {Row({ label: "Visa SP", field: "visaSp", type: "number" })}
+        {Row({ label: "Total SP", field: "totalSp", type: "number" })}
+        {Row({ label: "Final TTV", field: "finalTtv", type: "number", highlight: true })}
+        {Row({
+          label: "Payment Collected",
+          field: "paymentCollected",
+          type: "select",
+          options: YES_NO,
+        })}
+        {Row({
+          label: "Pending Amount",
+          field: "pendingAmount",
+          type: "number",
+          highlight: edited.pendingAmount > 0,
+        })}
       </div>
 
-      <div className="bg-teal-50 px-4 py-3 border-b border-t border-slate-200 mt-4">
-        <div className="text-sm text-slate-600">Vouchers & Status</div>
-      </div>
+      <SectionHeader label="Installments" className="bg-indigo-50" />
       <div>
-        <DetailRow label="Flight Voucher" value={booking.flightVoucher || "—"} />
-        <DetailRow label="Hotel Voucher" value={booking.hotelVoucher || "—"} />
-        <DetailRow label="Land Voucher" value={booking.landVoucher || "—"} />
-        <DetailRow label="Visa Voucher" value={booking.visaVoucher || "—"} />
-        <DetailRow label="Final Voucher" value={booking.finalVoucher || "—"} />
-        <DetailRow label="Voucher Pending" value={booking.voucherPending || "—"} />
-        <DetailRow label="Pre Trip" value={booking.preTrip || "—"} />
+        {[0, 1, 2].map((i) => (
+          <div key={i}>
+            <div className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Installment {i + 1}
+            </div>
+            {InstRow({ i, field: "dueDate", label: "Due Date" })}
+            {InstRow({ i, field: "amount", label: "Amount", type: "number" })}
+            {InstRow({ i, field: "status", label: "Status", type: "select", options: INST_STATUS })}
+          </div>
+        ))}
+        {Row({ label: "Additional", field: "additional" })}
+        {Row({
+          label: "Total Installment Amount",
+          field: "totalInstallment",
+          type: "number",
+          highlight: true,
+        })}
+        {Row({
+          label: "Discrepancy in Cost",
+          field: "discrepancy",
+          type: "select",
+          options: DISCREPANCY_OPTS,
+        })}
+        {Row({ label: "Payment Reminder", field: "paymentReminder" })}
+      </div>
+
+      <SectionHeader label="Urgent — Payment Release" className="bg-rose-50" />
+      <div className="px-4 py-3 border-b border-slate-100">
+        {Row({ label: "Free Cancellation Date", field: "freeCancellationDate" })}
+        <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+          {remark ?? "No release action needed — payment fully collected"}
+        </div>
+      </div>
+
+      <SectionHeader label="Vouchers & Status" className="bg-teal-50" />
+      <div>
+        {Row({
+          label: "Flight Voucher",
+          field: "flightVoucher",
+          type: "select",
+          options: VOUCHER_OPTS,
+        })}
+        {Row({
+          label: "Hotel Voucher",
+          field: "hotelVoucher",
+          type: "select",
+          options: VOUCHER_OPTS,
+        })}
+        {Row({
+          label: "Land Voucher",
+          field: "landVoucher",
+          type: "select",
+          options: VOUCHER_OPTS,
+        })}
+        {Row({
+          label: "Visa Voucher",
+          field: "visaVoucher",
+          type: "select",
+          options: VOUCHER_OPTS,
+        })}
+        {Row({
+          label: "Final Voucher",
+          field: "finalVoucher",
+          type: "select",
+          options: VOUCHER_OPTS,
+        })}
+        {Row({ label: "Voucher Pending", field: "voucherPending" })}
+        {Row({ label: "Trip Status", field: "tripStatus" })}
+        {Row({ label: "Pre Trip", field: "preTrip" })}
       </div>
     </div>
   );

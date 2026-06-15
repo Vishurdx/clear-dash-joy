@@ -4,6 +4,12 @@ import Papa from "papaparse";
 const SHEET_CSV_URL =
   "https://docs.google.com/spreadsheets/d/18RQr7HBcjye3bZy8ec4j5YeFcYIgXChFnfZr2-w_Dr0/export?format=csv&gid=0";
 
+export type Installment = {
+  dueDate: string;
+  amount: number;
+  status: string;
+};
+
 export type Booking = {
   pn: string;
   leadPax: string;
@@ -33,6 +39,11 @@ export type Booking = {
   finalVoucher: string;
   tripStatus: string;
   freeCancellationDate: string;
+  installments: Installment[];
+  additional: string;
+  totalInstallment: number;
+  discrepancy: string;
+  paymentReminder: string;
 };
 
 function num(v: string | undefined): number {
@@ -62,8 +73,8 @@ export const fetchBookings = createServerFn({ method: "GET" }).handler(
     const res = await fetch(url, {
       headers: {
         "cache-control": "no-cache",
-        "pragma": "no-cache"
-      }
+        pragma: "no-cache",
+      },
     });
     if (!res.ok) throw new Error(`Sheet fetch failed: ${res.status}`);
     const text = await res.text();
@@ -100,8 +111,30 @@ export const fetchBookings = createServerFn({ method: "GET" }).handler(
       flightVoucher: headerIndex(headers, "Flight voucher", "Flight Voucher"),
       finalVoucher: headerIndex(headers, "Final voucher", "Final Voucher"),
       tripStatus: headerIndex(headers, "Trip Status", "Trip status"),
-      freeCancellationDate: headerIndex(headers, "Free Cancellation Date", "Free Cancellation", "Cancellation Date"),
+      freeCancellationDate: headerIndex(
+        headers,
+        "Free Cancellation Date",
+        "Free Cancellation",
+        "Cancellation Date",
+      ),
       installments: headerIndex(headers, "Total installment amount", "Installment amount"),
+      inst1Due: headerIndex(headers, "Due date (Installment 1)"),
+      inst1Amt: headerIndex(headers, "Instalment 1", "Installment 1", "Amount for Installment 1"),
+      inst1Status: headerIndex(headers, "Installment 1 status"),
+      inst2Due: headerIndex(headers, "Due date (Installment 2)"),
+      inst2Amt: headerIndex(headers, "Amount for Installment 2", "Instalment 2", "Installment 2"),
+      inst2Status: headerIndex(headers, "Installment 2 status"),
+      inst3Due: headerIndex(headers, "Due date (Installment 3)"),
+      inst3Amt: headerIndex(headers, "Amount for Installment 3", "Instalment 3", "Installment 3"),
+      inst3Status: headerIndex(headers, "Installment 3 status"),
+      additional: headerIndex(headers, "Additional"),
+      discrepancy: headerIndex(
+        headers,
+        "Discrepanncy in cost",
+        "Discrepancy in cost",
+        "Discrepancy",
+      ),
+      paymentReminder: headerIndex(headers, "Payment reminder", "Payment Reminder"),
     };
 
     const rows: Booking[] = data
@@ -145,7 +178,30 @@ export const fetchBookings = createServerFn({ method: "GET" }).handler(
           flightVoucher: s(idx.flightVoucher >= 0 ? r[idx.flightVoucher] : undefined),
           finalVoucher: s(idx.finalVoucher >= 0 ? r[idx.finalVoucher] : undefined),
           tripStatus: s(idx.tripStatus >= 0 ? r[idx.tripStatus] : undefined),
-          freeCancellationDate: s(idx.freeCancellationDate >= 0 ? r[idx.freeCancellationDate] : undefined),
+          freeCancellationDate: s(
+            idx.freeCancellationDate >= 0 ? r[idx.freeCancellationDate] : undefined,
+          ),
+          installments: [
+            {
+              dueDate: s(idx.inst1Due >= 0 ? r[idx.inst1Due] : undefined),
+              amount: num(idx.inst1Amt >= 0 ? r[idx.inst1Amt] : undefined),
+              status: s(idx.inst1Status >= 0 ? r[idx.inst1Status] : undefined),
+            },
+            {
+              dueDate: s(idx.inst2Due >= 0 ? r[idx.inst2Due] : undefined),
+              amount: num(idx.inst2Amt >= 0 ? r[idx.inst2Amt] : undefined),
+              status: s(idx.inst2Status >= 0 ? r[idx.inst2Status] : undefined),
+            },
+            {
+              dueDate: s(idx.inst3Due >= 0 ? r[idx.inst3Due] : undefined),
+              amount: num(idx.inst3Amt >= 0 ? r[idx.inst3Amt] : undefined),
+              status: s(idx.inst3Status >= 0 ? r[idx.inst3Status] : undefined),
+            },
+          ],
+          additional: s(idx.additional >= 0 ? r[idx.additional] : undefined),
+          totalInstallment: installments,
+          discrepancy: s(idx.discrepancy >= 0 ? r[idx.discrepancy] : undefined),
+          paymentReminder: s(idx.paymentReminder >= 0 ? r[idx.paymentReminder] : undefined),
         };
       })
       .filter((r) => r.pn);
