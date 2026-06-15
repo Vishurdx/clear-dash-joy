@@ -2,7 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { fetchBookings, type Booking } from "@/lib/sheet.functions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,6 +43,19 @@ function daysUntil(dateStr: string): number | null {
   return Math.round((target - now.getTime()) / 86400000);
 }
 
+function getPaymentUrgencyColor(freeCancellationDate: string, travelDate: string): string | null {
+  const travelDays = daysUntil(travelDate);
+  if (travelDays === null || travelDays < 0) return null;
+
+  const cancellationDays = daysUntil(freeCancellationDate);
+  if (cancellationDays === null) return null;
+
+  if (cancellationDays <= 3) return "bg-red-50 border-l-4 border-red-500";
+  if (cancellationDays <= 6) return "bg-orange-50 border-l-4 border-orange-500";
+  if (cancellationDays >= 7) return "bg-pink-50 border-l-4 border-pink-500";
+  return null;
+}
+
 function isFullyCollected(b: Booking) {
   return b.paymentCollected.toLowerCase() === "yes" || b.pendingAmount <= 0;
 }
@@ -53,7 +74,10 @@ function Dashboard() {
   const [opsRm, setOpsRm] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [daysFilter, setDaysFilter] = useState("");
+  const [hideDropped, setHideDropped] = useState(false);
   const [tab, setTab] = useState<"all" | "payment" | "voucher" | "upcoming">("all");
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [showNewBookingForm, setShowNewBookingForm] = useState(false);
 
   const rows = data?.rows ?? [];
 
@@ -88,11 +112,13 @@ function Dashboard() {
       if (daysFilter) {
         const d = daysUntil(b.travelDate);
         if (d === null) return false;
-        if (daysFilter === "le14" && !(d <= 14)) return false;
+        if (daysFilter === "after-today" && !(d >= 0)) return false;
+        if (daysFilter === "0-14" && !(d >= 0 && d <= 14)) return false;
         if (daysFilter === "15-30" && !(d >= 15 && d <= 30)) return false;
         if (daysFilter === "31-90" && !(d >= 31 && d <= 90)) return false;
         if (daysFilter === "gt90" && !(d > 90)) return false;
       }
+      if (hideDropped && b.tripStatus && b.tripStatus.toLowerCase().includes("dropped")) return false;
       if (tab === "payment" && isFullyCollected(b)) return false;
       if (tab === "voucher" && b.finalVoucher.toLowerCase() === "shared") return false;
       if (tab === "upcoming") {
@@ -101,19 +127,19 @@ function Dashboard() {
       }
       return true;
     });
-  }, [rows, search, destination, seller, opsRm, paymentStatus, daysFilter, tab]);
+  }, [rows, search, destination, seller, opsRm, paymentStatus, daysFilter, hideDropped, tab]);
 
   const kpis = useMemo(() => {
-    const finalTtv = rows.reduce((a, b) => a + b.finalTtv, 0);
-    const pending = rows.reduce((a, b) => a + b.pendingAmount, 0);
-    const fully = rows.filter(isFullyCollected).length;
-    const le14 = rows.filter((b) => {
+    const finalTtv = filtered.reduce((a, b) => a + b.finalTtv, 0);
+    const pending = filtered.reduce((a, b) => a + b.pendingAmount, 0);
+    const fully = filtered.filter(isFullyCollected).length;
+    const le14 = filtered.filter((b) => {
       const d = daysUntil(b.travelDate);
       return d !== null && d >= 0 && d <= 14;
     }).length;
-    const unassigned = rows.filter((b) => !b.opsRm || !OPS_RMS.includes(b.opsRm)).length;
-    return { total: rows.length, finalTtv, pending, fully, le14, unassigned };
-  }, [rows]);
+    const unassigned = filtered.filter((b) => !b.opsRm || !OPS_RMS.includes(b.opsRm)).length;
+    return { total: filtered.length, finalTtv, pending, fully, le14, unassigned };
+  }, [filtered]);
 
   const clear = () => {
     setSearch("");
@@ -122,6 +148,7 @@ function Dashboard() {
     setOpsRm("");
     setPaymentStatus("");
     setDaysFilter("");
+    setHideDropped(false);
   };
 
   return (
@@ -140,7 +167,9 @@ function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="rounded-md bg-emerald-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700">
+            <button
+              onClick={() => setShowNewBookingForm(true)}
+              className="rounded-md bg-emerald-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700">
               + New booking
             </button>
             <button
@@ -197,12 +226,23 @@ function Dashboard() {
               onChange={setDaysFilter}
               placeholder="Days to travel"
               options={[
-                { value: "le14", label: "≤ 14 days" },
-                { value: "15-30", label: "15–30 days" },
-                { value: "31-90", label: "31–90 days" },
-                { value: "gt90", label: "> 90 days" },
+                { value: "after-today", label: "Travel date is after today" },
+                { value: "0-14", label: "Next 14 days" },
+                { value: "15-30", label: "Next 30 days" },
+                { value: "31-90", label: "Next 90 days" },
+                { value: "gt90", label: "More than 90 days" },
               ]}
             />
+            <button
+              onClick={() => setHideDropped(!hideDropped)}
+              className={`h-9 rounded-md px-3 text-sm font-medium transition ${
+                hideDropped
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {hideDropped ? "✓ Hide Dropped" : "Hide Dropped"}
+            </button>
             <button
               onClick={clear}
               className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50"
@@ -247,6 +287,7 @@ function Dashboard() {
                 {[
                   "PN","Lead pax","Destination","Travel","Days","Pax","Seller","Ops RM",
                   "Flight SP","Hotel SP","Land SP","Visa SP","Final TTV","Total SP","Payment","Pending","Status",
+                  ...(tab === "payment" ? ["Urgent"] : []),
                 ].map((h) => (
                   <th key={h} className="whitespace-nowrap px-3 py-3 font-semibold">
                     {h}
@@ -268,13 +309,23 @@ function Dashboard() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((b) => {
+                filtered.map((b, index) => {
                   const full = isFullyCollected(b);
                   return (
-                    <tr key={b.pn} className="hover:bg-slate-50/60">
-                      <td className="whitespace-nowrap px-3 py-2.5">
-                        <span className="font-medium text-emerald-700">{b.pn}</span>
-                      </td>
+                    <tr key={`${b.pn || "row"}-${index}`} className="hover:bg-slate-50/60">
+                      {(() => {
+                        const urgencyColor = tab === "payment" ? getPaymentUrgencyColor(b.freeCancellationDate, b.travelDate) : null;
+                        return (
+                          <td className={`whitespace-nowrap px-3 py-2.5 ${urgencyColor || ""}`}>
+                            <button
+                              onClick={() => setSelectedBooking(b)}
+                              className="font-medium text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
+                            >
+                              {b.pn}
+                            </button>
+                          </td>
+                        );
+                      })()}
                       <td className="whitespace-nowrap px-3 py-2.5 text-slate-800">{b.leadPax}</td>
                       <td className="whitespace-nowrap px-3 py-2.5">
                         <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
@@ -315,6 +366,38 @@ function Dashboard() {
                         {b.pendingAmount > 0 ? inr(b.pendingAmount) : "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">{b.preTrip || "—"}</td>
+                      {tab === "payment" && (
+                        <td className="whitespace-nowrap px-3 py-2.5">
+                          {b.freeCancellationDate ? (
+                            (() => {
+                              const days = daysUntil(b.freeCancellationDate);
+                              let badgeClass = "";
+                              let label = "";
+                              if (days !== null) {
+                                if (days <= 3) {
+                                  badgeClass = "bg-red-100 text-red-800";
+                                  label = `${days}d - URGENT`;
+                                } else if (days <= 6) {
+                                  badgeClass = "bg-orange-100 text-orange-800";
+                                  label = `${days}d - HIGH`;
+                                } else if (days >= 7) {
+                                  badgeClass = "bg-pink-100 text-pink-800";
+                                  label = `${days}d - MEDIUM`;
+                                }
+                              }
+                              return badgeClass ? (
+                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${badgeClass}`}>
+                                  {label}
+                                </span>
+                              ) : (
+                                "—"
+                              );
+                            })()
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -327,6 +410,24 @@ function Dashboard() {
           {data ? `Last refreshed ${new Date(data.fetchedAt).toLocaleString()}` : ""}
         </p>
       </main>
+
+      <Dialog open={showNewBookingForm} onOpenChange={setShowNewBookingForm}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Booking</DialogTitle>
+          </DialogHeader>
+          <NewBookingForm onSuccess={() => { setShowNewBookingForm(false); refetch(); }} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Booking Details — PN {selectedBooking?.pn}</DialogTitle>
+          </DialogHeader>
+          {selectedBooking && <BookingDetailView booking={selectedBooking} inr={inr} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -387,5 +488,175 @@ function OpsRmSelect({ value }: { value: string }) {
         </option>
       ))}
     </select>
+  );
+}
+
+function NewBookingForm({ onSuccess }: { onSuccess: () => void }) {
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<Partial<Booking>>({
+    defaultValues: {
+      adult: 1,
+      child: 0,
+      infant: 0,
+      flightSp: 0,
+      hotelSp: 0,
+      landSp: 0,
+      visaSp: 0,
+      finalTtv: 0,
+      totalSp: 0,
+      pendingAmount: 0,
+    },
+  });
+
+  const onSubmit = (data: Partial<Booking>) => {
+    console.log("New booking data:", data);
+    setTimeout(() => {
+      reset();
+      onSuccess();
+    }, 500);
+  };
+
+  const formFields = [
+    { name: "pn" as const, label: "PN Number", type: "text", required: true },
+    { name: "leadPax" as const, label: "Lead Pax Name", type: "text", required: true },
+    { name: "destination" as const, label: "Destination", type: "text", required: true },
+    { name: "travelDate" as const, label: "Travel Date", type: "text", placeholder: "MM/DD/YYYY" },
+    { name: "matrics" as const, label: "Matrics", type: "text" },
+    { name: "adult" as const, label: "Adults", type: "number", min: 0 },
+    { name: "child" as const, label: "Children", type: "number", min: 0 },
+    { name: "infant" as const, label: "Infants", type: "number", min: 0 },
+    { name: "seller" as const, label: "Seller", type: "text" },
+    { name: "opsRm" as const, label: "Ops RM", type: "text" },
+    { name: "flightSp" as const, label: "Flight SP", type: "number", min: 0 },
+    { name: "hotelSp" as const, label: "Hotel SP", type: "number", min: 0 },
+    { name: "landSp" as const, label: "Land SP", type: "number", min: 0 },
+    { name: "visaSp" as const, label: "Visa SP", type: "number", min: 0 },
+    { name: "finalTtv" as const, label: "Final TTV", type: "number", min: 0 },
+    { name: "totalSp" as const, label: "Total SP", type: "number", min: 0 },
+    { name: "pendingAmount" as const, label: "Pending Amount", type: "number", min: 0 },
+    { name: "paymentCollected" as const, label: "Payment Collected", type: "text" },
+    { name: "preTrip" as const, label: "Pre Trip", type: "text" },
+    { name: "daysToTravel" as const, label: "Days to Travel", type: "text" },
+    { name: "voucherPending" as const, label: "Voucher Pending", type: "text" },
+    { name: "hotelVoucher" as const, label: "Hotel Voucher", type: "text" },
+    { name: "landVoucher" as const, label: "Land Voucher", type: "text" },
+    { name: "visaVoucher" as const, label: "Visa Voucher", type: "text" },
+    { name: "flightVoucher" as const, label: "Flight Voucher", type: "text" },
+    { name: "finalVoucher" as const, label: "Final Voucher", type: "text" },
+  ];
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        {formFields.map((field) => (
+          <div key={field.name} className="flex flex-col">
+            <label className="mb-1 text-sm font-medium text-slate-700">{field.label}</label>
+            <input
+              {...register(field.name)}
+              type={field.type}
+              placeholder={field.placeholder || ""}
+              min={field.min}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            />
+            {errors[field.name] && (
+              <span className="mt-1 text-xs text-red-600">{errors[field.name]?.message}</span>
+            )}
+          </div>
+        ))}
+      </div>
+      <DialogFooter>
+        <button
+          type="button"
+          onClick={() => reset()}
+          className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Clear
+        </button>
+        <button
+          type="submit"
+          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+        >
+          Add Booking
+        </button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+function BookingDetailView({ booking, inr }: { booking: Booking; inr: (n: number) => string }) {
+  const DetailRow = ({
+    label,
+    value,
+    highlight,
+  }: {
+    label: string;
+    value: string | number;
+    highlight?: boolean;
+  }) => (
+    <div className={`py-3 px-4 border-b border-slate-100 flex justify-between items-center ${highlight ? "bg-slate-50" : ""}`}>
+      <span className="text-sm font-medium text-slate-600">{label}</span>
+      <span className={`text-sm font-semibold ${highlight ? "text-emerald-700" : "text-slate-900"}`}>
+        {value}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="rounded-lg bg-white border border-slate-200">
+      <div className="bg-emerald-50 px-4 py-3 border-b border-slate-200">
+        <div className="text-sm text-slate-600">Booking Information</div>
+      </div>
+      <div>
+        <DetailRow label="PN" value={booking.pn} highlight />
+        <DetailRow label="Lead Pax" value={booking.leadPax} />
+        <DetailRow label="Destination" value={booking.destination} />
+        <DetailRow label="Travel Date" value={booking.travelDate || "—"} />
+        <DetailRow label="Days to Travel" value={booking.daysToTravel || "—"} />
+      </div>
+
+      <div className="bg-blue-50 px-4 py-3 border-b border-t border-slate-200 mt-4">
+        <div className="text-sm text-slate-600">Passengers</div>
+      </div>
+      <div>
+        <DetailRow label="Adults" value={booking.adult} />
+        <DetailRow label="Children" value={booking.child} />
+        <DetailRow label="Infants" value={booking.infant} />
+        <DetailRow label="Matrics" value={booking.matrics || "—"} />
+      </div>
+
+      <div className="bg-purple-50 px-4 py-3 border-b border-t border-slate-200 mt-4">
+        <div className="text-sm text-slate-600">Seller & Operations</div>
+      </div>
+      <div>
+        <DetailRow label="Seller" value={booking.seller || "—"} />
+        <DetailRow label="Ops RM" value={booking.opsRm || "Unassigned"} />
+      </div>
+
+      <div className="bg-amber-50 px-4 py-3 border-b border-t border-slate-200 mt-4">
+        <div className="text-sm text-slate-600">Pricing & Payment</div>
+      </div>
+      <div>
+        <DetailRow label="Flight SP" value={inr(booking.flightSp)} />
+        <DetailRow label="Hotel SP" value={inr(booking.hotelSp)} />
+        <DetailRow label="Land SP" value={inr(booking.landSp)} />
+        <DetailRow label="Visa SP" value={inr(booking.visaSp)} />
+        <DetailRow label="Total SP" value={inr(booking.totalSp)} />
+        <DetailRow label="Final TTV" value={inr(booking.finalTtv)} highlight />
+        <DetailRow label="Payment Collected" value={booking.paymentCollected} />
+        <DetailRow label="Pending Amount" value={inr(booking.pendingAmount)} highlight={booking.pendingAmount > 0} />
+      </div>
+
+      <div className="bg-teal-50 px-4 py-3 border-b border-t border-slate-200 mt-4">
+        <div className="text-sm text-slate-600">Vouchers & Status</div>
+      </div>
+      <div>
+        <DetailRow label="Flight Voucher" value={booking.flightVoucher || "—"} />
+        <DetailRow label="Hotel Voucher" value={booking.hotelVoucher || "—"} />
+        <DetailRow label="Land Voucher" value={booking.landVoucher || "—"} />
+        <DetailRow label="Visa Voucher" value={booking.visaVoucher || "—"} />
+        <DetailRow label="Final Voucher" value={booking.finalVoucher || "—"} />
+        <DetailRow label="Voucher Pending" value={booking.voucherPending || "—"} />
+        <DetailRow label="Pre Trip" value={booking.preTrip || "—"} />
+      </div>
+    </div>
   );
 }
