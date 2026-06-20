@@ -1,155 +1,176 @@
 import { createServerFn } from "@tanstack/react-start";
 import Papa from "papaparse";
 
+// URL of the Google Sheet CSV export (publicly shared)
 const SHEET_CSV_URL =
   "https://docs.google.com/spreadsheets/d/18RQr7HBcjye3bZy8ec4j5YeFcYIgXChFnfZr2-w_Dr0/export?format=csv&gid=0";
 
+/**
+ * Types representing the data model pulled from the sheet.
+ */
+export enum CollectionPriority {
+  Critical = "Critical",
+  High = "High",
+  Low = "Low"
+}
 export type Booking = {
-  pn: string;
-  leadPax: string;
+  pn: string; // Booking reference number
+  leadPax: string; // Lead/Passenger name
   destination: string;
-  travelDate: string;
-  matrics: string;
-  adult: number;
-  child: number;
-  infant: number;
-  seller: string;
-  opsRm: string;
-  flightSp: number;
-  hotelSp: number;
-  landSp: number;
-  visaSp: number;
-  finalTtv: number;
-  totalSp: number;
-  paymentCollected: string;
-  pendingAmount: number;
-  preTrip: string;
-  daysToTravel: string;
-  voucherPending: string;
-  hotelVoucher: string;
-  landVoucher: string;
-  visaVoucher: string;
-  flightVoucher: string;
-  finalVoucher: string;
-  tripStatus: string;
-  freeCancellationDate: string;
+  travelDate: string; // ISO date string (e.g., "2024-12-31")
+  freeCancellationDate: string; // "FOC" date
+  installment1Status?: string; // Status for installment 1 (column BK)
+  installment2Date: string; // Due date for installment 2 (column BL)
+  installment2Status: string; // Status for installment 2 (column BN)
+  installment3Date: string; // Due date for installment 3 (column BO)
+  installment3Status: string; // Status for installment 3 (column BQ)
+  paymentCollected: string; // "Yes" / "No" (column BV)
+  pendingAmount: number; // Pending amount (numeric)
+  opsRm: string; // Assigned Relationship Manager
+  seller?: string; // Seller column (optional)
+  finalVoucher?: string; // Final Voucher column (optional)
+  tripStatus?: string; // Trip Status column (optional)
+  installment1Amount?: number; // 1st installment amount (BI column)
+  // Additional optional numeric fields used in UI
+  adult?: number;
+  child?: number;
+  infant?: number;
+  flightSp?: number;
+  hotelSp?: number;
+  landSp?: number;
+  visaSp?: number;
+  totalSp?: number;
+  finalTtv?: number;
+  // Additional optional string fields used in UI
+  preTrip?: string;
+  daysToTravel?: string;
+  voucherPending?: string;
+  hotelVoucher?: string;
+  landVoucher?: string;
+  visaVoucher?: string;
+  flightVoucher?: string;
+  // Additional fields that may exist in the sheet but are not required for the UI
+  [key: string]: any;
 };
 
-function num(v: string | undefined): number {
-  if (!v) return 0;
-  const n = Number(String(v).replace(/[,₹\s-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
+/**
+ * Helper: Calculate the number of days from today until the given date string.
+ * Returns `null` if the date cannot be parsed.
+ */
+export function daysUntil(dateStr: string | undefined | null): number | null {
+  if (!dateStr) return null;
+  const target = new Date(dateStr);
+  // Removed erroneous React hook
+  if (isNaN(target.getTime())) return null;
+  const today = new Date();
+  // Reset time components to ignore time‑of‑day differences
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  const diffMs = target.getTime() - today.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  return diffDays;
+}
+export function daysSince(dateStr: string | undefined | null): number | null {
+  if (!dateStr) return null;
+  const target = new Date(dateStr);
+  if (isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  const diffMs = today.getTime() - target.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  return diffDays;
 }
 
-function s(v: string | undefined): string {
-  return (v ?? "").trim();
+/**
+ * Format a number as Indian Rupees (₹) with commas.
+ */
+export function inr(amount: number | undefined): string {
+  if (amount === undefined || amount === null) return "₹0";
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 0,
+  }).format(amount);
 }
 
-function normalizeHeader(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+/**
+ * Server function that fetches the CSV, parses it, and returns a list of bookings.
+ */
+export const fetchBookings = createServerFn({ method: "GET" }).handler(async () => {
+  const resp = await fetch(SHEET_CSV_URL);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch sheet CSV: ${resp.status}`);
+  }
+  const csvText = await resp.text();
 
-function headerIndex(headers: string[], ...candidates: string[]): number {
-  const normalized = candidates.map(normalizeHeader);
-  const match = headers.findIndex((header) => normalized.includes(normalizeHeader(header)));
-  return match >= 0 ? match : -1;
-}
+  const parsed = Papa.parse(csvText, {
+    header: false,
+    skipEmptyLines: true,
+  });
 
-export const fetchBookings = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ rows: Booking[]; fetchedAt: string }> => {
-    const cacheId = Date.now();
-    const url = `${SHEET_CSV_URL}&rand=${cacheId}`;
-    const res = await fetch(url, {
-      headers: {
-        "cache-control": "no-cache",
-        "pragma": "no-cache"
-      }
+  if (parsed.errors.length) {
+    console.warn("CSV parsing errors", parsed.errors);
+  }
+
+  const parseNum = (val: any): number => {
+    if (val === undefined || val === null) return 0;
+    const clean = val.toString().replace(/,/g, "").trim();
+    const num = parseFloat(clean);
+    return isNaN(num) ? 0 : num;
+  };
+
+  const rows: Booking[] = (parsed.data as any[][])
+    .filter((row) => {
+      const pn = row[2]?.toString()?.trim() || "";
+      return pn.startsWith("PN-");
+    })
+    .map((row) => {
+      return {
+        pn: row[2]?.toString()?.trim() || "",
+        leadPax: row[11]?.toString()?.trim() || "",
+        destination: row[15]?.toString()?.trim() || "",
+        travelDate: row[4]?.toString()?.trim() || "",
+        freeCancellationDate: row[5]?.toString()?.trim() || "",
+        installment1Status: row[62]?.toString()?.trim() || "",
+        installment2Date: row[63]?.toString()?.trim() || "",
+        installment2Status: row[65]?.toString()?.trim() || "",
+        installment3Date: row[66]?.toString()?.trim() || "",
+        installment3Status: row[68]?.toString()?.trim() || "",
+        paymentCollected: row[73]?.toString()?.trim() || "",
+        pendingAmount: parseNum(row[70]),
+        installment1Amount: parseNum(row[60]),
+        opsRm: row[12]?.toString()?.trim() || "",
+        seller: row[19]?.toString()?.trim() || "",
+        finalVoucher: row[17]?.toString()?.trim() || "",
+        tripStatus: row[84]?.toString()?.trim() || "",
+
+        // Adults, child, infant
+        adult: parseNum(row[6]),
+        child: parseNum(row[7]),
+        infant: parseNum(row[8]),
+
+        // SP info
+        flightSp: parseNum(row[37]),
+        hotelSp: parseNum(row[38]),
+        landSp: parseNum(row[39]),
+        visaSp: parseNum(row[40]),
+        finalTtv: parseNum(row[41]),
+        totalSp: parseNum(row[33]),
+
+        // Vouchers
+        hotelVoucher: row[27]?.toString()?.trim() || "",
+        landVoucher: row[28]?.toString()?.trim() || "",
+        visaVoucher: row[29]?.toString()?.trim() || "",
+        flightVoucher: row[30]?.toString()?.trim() || "",
+        voucherPending: row[31]?.toString()?.trim() || "",
+        preTrip: row[83]?.toString()?.trim() || "",
+        daysToTravel: row[92]?.toString()?.trim() || "",
+        matrics: row[18]?.toString()?.trim() || "",
+      };
     });
-    if (!res.ok) throw new Error(`Sheet fetch failed: ${res.status}`);
-    const text = await res.text();
-    const parsed = Papa.parse<string[]>(text, { skipEmptyLines: true });
-    const all = parsed.data as string[][];
-    const headers = all[1] ?? [];
-    const data = all.slice(2);
 
-    const idx = {
-      pn: headerIndex(headers, "PN. Number", "PN Number", "PN"),
-      leadPax: headerIndex(headers, "Lead pax name", "Lead pax"),
-      destination: headerIndex(headers, "Destination"),
-      travelDate: headerIndex(headers, "Date of Travel", "Travel Date"),
-      matrics: headerIndex(headers, "Matrics"),
-      adult: headerIndex(headers, "Adult"),
-      child: headerIndex(headers, "Child"),
-      infant: headerIndex(headers, "Infant"),
-      seller: headerIndex(headers, "Seller name dropdown", "Seller name", "Seller"),
-      opsRm: headerIndex(headers, "Ops RM", "OpsRM"),
-      flightSp: headerIndex(headers, "Flights SP", "Flight SP"),
-      hotelSp: headerIndex(headers, "Hotel SP"),
-      landSp: headerIndex(headers, "Land SP"),
-      visaSp: headerIndex(headers, "VISA SP", "Visa SP"),
-      finalTtv: headerIndex(headers, "Final ttv", "Final TTV"),
-      totalSp: headerIndex(headers, "Total SP"),
-      paymentCollected: headerIndex(headers, "Final Payment Collected", "Payment Collected"),
-      pendingAmount: headerIndex(headers, "Pending Final Amount", "Pending Amount"),
-      preTrip: headerIndex(headers, "Pre Trip", "PreTrip"),
-      daysToTravel: headerIndex(headers, "Days to Travel"),
-      voucherPending: headerIndex(headers, "Voucher Pending"),
-      hotelVoucher: headerIndex(headers, "Hotel voucher"),
-      landVoucher: headerIndex(headers, "Land Voucher"),
-      visaVoucher: headerIndex(headers, "Visa voucher", "Visa Voucher"),
-      flightVoucher: headerIndex(headers, "Flight voucher", "Flight Voucher"),
-      finalVoucher: headerIndex(headers, "Final voucher", "Final Voucher"),
-      tripStatus: headerIndex(headers, "Trip Status", "Trip status"),
-      freeCancellationDate: headerIndex(headers, "Free Cancellation Date", "Free Cancellation", "Cancellation Date"),
-      installments: headerIndex(headers, "Total installment amount", "Installment amount"),
-    };
+  console.log('Fetched rows count:', rows.length);
 
-    const rows: Booking[] = data
-      .map((r) => {
-        const pn = s(idx.pn >= 0 ? r[idx.pn] : undefined);
-        const totalSp = num(idx.totalSp >= 0 ? r[idx.totalSp] : undefined);
-        const installments = num(idx.installments >= 0 ? r[idx.installments] : undefined);
-        const finalCollected = s(idx.paymentCollected >= 0 ? r[idx.paymentCollected] : undefined);
-        const bsPendingAmount = num(idx.pendingAmount >= 0 ? r[idx.pendingAmount] : undefined);
-        const pending =
-          bsPendingAmount > 0
-            ? bsPendingAmount
-            : finalCollected.toLowerCase() === "yes"
-              ? 0
-              : Math.max(totalSp - installments, 0);
-        return {
-          pn,
-          leadPax: s(idx.leadPax >= 0 ? r[idx.leadPax] : undefined),
-          destination: s(idx.destination >= 0 ? r[idx.destination] : undefined),
-          travelDate: s(idx.travelDate >= 0 ? r[idx.travelDate] : undefined),
-          matrics: s(idx.matrics >= 0 ? r[idx.matrics] : undefined),
-          adult: num(idx.adult >= 0 ? r[idx.adult] : undefined),
-          child: num(idx.child >= 0 ? r[idx.child] : undefined),
-          infant: num(idx.infant >= 0 ? r[idx.infant] : undefined),
-          seller: s(idx.seller >= 0 ? r[idx.seller] : undefined),
-          opsRm: s(idx.opsRm >= 0 ? r[idx.opsRm] : undefined),
-          flightSp: num(idx.flightSp >= 0 ? r[idx.flightSp] : undefined),
-          hotelSp: num(idx.hotelSp >= 0 ? r[idx.hotelSp] : undefined),
-          landSp: num(idx.landSp >= 0 ? r[idx.landSp] : undefined),
-          visaSp: num(idx.visaSp >= 0 ? r[idx.visaSp] : undefined),
-          finalTtv: num(idx.finalTtv >= 0 ? r[idx.finalTtv] : undefined),
-          totalSp,
-          paymentCollected: finalCollected,
-          pendingAmount: pending,
-          preTrip: s(idx.preTrip >= 0 ? r[idx.preTrip] : undefined),
-          daysToTravel: s(idx.daysToTravel >= 0 ? r[idx.daysToTravel] : undefined),
-          voucherPending: s(idx.voucherPending >= 0 ? r[idx.voucherPending] : undefined),
-          hotelVoucher: s(idx.hotelVoucher >= 0 ? r[idx.hotelVoucher] : undefined),
-          landVoucher: s(idx.landVoucher >= 0 ? r[idx.landVoucher] : undefined),
-          visaVoucher: s(idx.visaVoucher >= 0 ? r[idx.visaVoucher] : undefined),
-          flightVoucher: s(idx.flightVoucher >= 0 ? r[idx.flightVoucher] : undefined),
-          finalVoucher: s(idx.finalVoucher >= 0 ? r[idx.finalVoucher] : undefined),
-          tripStatus: s(idx.tripStatus >= 0 ? r[idx.tripStatus] : undefined),
-          freeCancellationDate: s(idx.freeCancellationDate >= 0 ? r[idx.freeCancellationDate] : undefined),
-        };
-      })
-      .filter((r) => r.pn);
-
-    return { rows, fetchedAt: new Date().toISOString() };
-  },
-);
+  return { rows, fetchedAt: new Date().toISOString() };
+});

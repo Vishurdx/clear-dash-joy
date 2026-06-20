@@ -3,7 +3,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { fetchBookings, type Booking } from "@/lib/sheet.functions";
+import { fetchBookings, type Booking, daysUntil, daysSince, CollectionPriority } from "@/lib/sheet.functions";
+import { PaymentTrackerTab } from "@/components/PaymentTrackerTab";
+import { VoucherReleaseTab } from "@/components/VoucherReleaseTab";
 import {
   Dialog,
   DialogContent,
@@ -26,22 +28,14 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-const OPS_RMS = ["Vishwajeet", "Shruti"];
-const inr = (n: number) =>
-  n === 0
+const OPS_RMS_LOCAL = ["Vishwajeet", "Shruti"];
+const inr = (n: number | undefined) => {
+  if (n === undefined || n === null) return "—";
+  return n === 0
     ? "—"
     : "₹" +
       new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
-
-function daysUntil(dateStr: string): number | null {
-  if (!dateStr) return null;
-  const [m, d, y] = dateStr.split("/").map(Number);
-  if (!m || !d || !y) return null;
-  const target = new Date(y, m - 1, d).getTime();
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.round((target - now.getTime()) / 86400000);
-}
+};
 
 function getPaymentUrgencyColor(freeCancellationDate: string, travelDate: string): string | null {
   const travelDays = daysUntil(travelDate);
@@ -57,7 +51,13 @@ function getPaymentUrgencyColor(freeCancellationDate: string, travelDate: string
 }
 
 function isFullyCollected(b: Booking) {
-  return b.paymentCollected.toLowerCase() === "yes" || b.pendingAmount <= 0;
+  return (b.paymentCollected?.toLowerCase() ?? "") === "yes" || b.pendingAmount <= 0;
+}
+
+function getPriorityColor(priority: CollectionPriority | undefined): string {
+  if (priority === "Critical") return "bg-red-100 text-red-800 border-red-200";
+  if (priority === "High") return "bg-orange-100 text-orange-800 border-orange-200";
+  return "bg-green-100 text-green-800 border-green-200";
 }
 
 function Dashboard() {
@@ -86,7 +86,7 @@ function Dashboard() {
     [rows],
   );
   const sellers = useMemo(
-    () => [...new Set(rows.map((r) => r.seller).filter(Boolean))].sort(),
+    () => [...new Set(rows.map((r) => r.seller).filter((s): s is string => !!s))].sort(),
     [rows],
   );
 
@@ -120,7 +120,7 @@ function Dashboard() {
       }
       if (hideDropped && b.tripStatus && b.tripStatus.toLowerCase().includes("dropped")) return false;
       if (tab === "payment" && isFullyCollected(b)) return false;
-      if (tab === "voucher" && b.finalVoucher.toLowerCase() === "shared") return false;
+      if (tab === "voucher" && b.finalVoucher?.toLowerCase() === "shared") return false;
       if (tab === "upcoming") {
         const d = daysUntil(b.travelDate);
         if (d === null || d < 0) return false;
@@ -128,18 +128,6 @@ function Dashboard() {
       return true;
     });
   }, [rows, search, destination, seller, opsRm, paymentStatus, daysFilter, hideDropped, tab]);
-
-  const kpis = useMemo(() => {
-    const finalTtv = filtered.reduce((a, b) => a + b.finalTtv, 0);
-    const pending = filtered.reduce((a, b) => a + b.pendingAmount, 0);
-    const fully = filtered.filter(isFullyCollected).length;
-    const le14 = filtered.filter((b) => {
-      const d = daysUntil(b.travelDate);
-      return d !== null && d >= 0 && d <= 14;
-    }).length;
-    const unassigned = filtered.filter((b) => !b.opsRm || !OPS_RMS.includes(b.opsRm)).length;
-    return { total: filtered.length, finalTtv, pending, fully, le14, unassigned };
-  }, [filtered]);
 
   const clear = () => {
     setSearch("");
@@ -150,6 +138,18 @@ function Dashboard() {
     setDaysFilter("");
     setHideDropped(false);
   };
+
+  const kpis = useMemo(() => {
+    const finalTtv = filtered.reduce((a, b) => a + (b.finalTtv ?? 0), 0);
+    const pending = filtered.reduce((a, b) => a + b.pendingAmount, 0);
+    const fully = filtered.filter(isFullyCollected).length;
+    const le14 = filtered.filter((b) => {
+      const d = daysUntil(b.travelDate);
+      return d !== null && d >= 0 && d <= 14;
+    }).length;
+    const unassigned = filtered.filter((b) => !b.opsRm || !OPS_RMS_LOCAL.includes(b.opsRm)).length;
+    return { total: filtered.length, finalTtv, pending, fully, le14, unassigned };
+  }, [filtered]);
 
   return (
     <div className="min-h-screen bg-[#f7f8fa]">
@@ -211,7 +211,7 @@ function Dashboard() {
             />
             <Select value={destination} onChange={setDestination} placeholder="All destinations" options={destinations} />
             <Select value={seller} onChange={setSeller} placeholder="All sellers" options={sellers} />
-            <Select value={opsRm} onChange={setOpsRm} placeholder="All Ops RM" options={["Unassigned", ...OPS_RMS]} />
+            <Select value={opsRm} onChange={setOpsRm} placeholder="All Ops RM" options={["Unassigned", ...OPS_RMS_LOCAL]} />
             <Select
               value={paymentStatus}
               onChange={setPaymentStatus}
@@ -261,7 +261,7 @@ function Dashboard() {
             {([
               ["all", "All bookings"],
               ["payment", "Payment tracker"],
-              ["voucher", "Voucher status"],
+              ["voucher", "Voucher release"],
               ["upcoming", "Upcoming trips"],
             ] as const).map(([k, label]) => (
               <button
@@ -279,15 +279,28 @@ function Dashboard() {
           </div>
         </section>
 
-        {/* Table */}
-        <section className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        {/* Payment Tracker Command Center */}
+        {tab === "payment" && (
+          <section className="mt-3">
+            <PaymentTrackerTab bookings={rows} isLoading={isLoading} />
+          </section>
+        )}
+
+        {/* Voucher Release Command Center */}
+        {tab === "voucher" && (
+          <section className="mt-3">
+            <VoucherReleaseTab bookings={rows} isLoading={isLoading} />
+          </section>
+        )}
+
+        {/* Table — all other tabs */}
+        {tab !== "payment" && tab !== "voucher" && <section className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="w-full min-w-[1500px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 {[
                   "PN","Lead pax","Destination","Travel","Days","Pax","Seller","Ops RM",
                   "Flight SP","Hotel SP","Land SP","Visa SP","Final TTV","Total SP","Payment","Pending","Status",
-                  ...(tab === "payment" ? ["Urgent"] : []),
                 ].map((h) => (
                   <th key={h} className="whitespace-nowrap px-3 py-3 font-semibold">
                     {h}
@@ -313,19 +326,14 @@ function Dashboard() {
                   const full = isFullyCollected(b);
                   return (
                     <tr key={`${b.pn || "row"}-${index}`} className="hover:bg-slate-50/60">
-                      {(() => {
-                        const urgencyColor = tab === "payment" ? getPaymentUrgencyColor(b.freeCancellationDate, b.travelDate) : null;
-                        return (
-                          <td className={`whitespace-nowrap px-3 py-2.5 ${urgencyColor || ""}`}>
-                            <button
-                              onClick={() => setSelectedBooking(b)}
-                              className="font-medium text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
-                            >
-                              {b.pn}
-                            </button>
-                          </td>
-                        );
-                      })()}
+                      <td className="whitespace-nowrap px-3 py-2.5">
+                        <button
+                          onClick={() => setSelectedBooking(b)}
+                          className="font-medium text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
+                        >
+                          {b.pn}
+                        </button>
+                      </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-slate-800">{b.leadPax}</td>
                       <td className="whitespace-nowrap px-3 py-2.5">
                         <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
@@ -366,45 +374,13 @@ function Dashboard() {
                         {b.pendingAmount > 0 ? inr(b.pendingAmount) : "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">{b.preTrip || "—"}</td>
-                      {tab === "payment" && (
-                        <td className="whitespace-nowrap px-3 py-2.5">
-                          {b.freeCancellationDate ? (
-                            (() => {
-                              const days = daysUntil(b.freeCancellationDate);
-                              let badgeClass = "";
-                              let label = "";
-                              if (days !== null) {
-                                if (days <= 3) {
-                                  badgeClass = "bg-red-100 text-red-800";
-                                  label = `${days}d - URGENT`;
-                                } else if (days <= 6) {
-                                  badgeClass = "bg-orange-100 text-orange-800";
-                                  label = `${days}d - HIGH`;
-                                } else if (days >= 7) {
-                                  badgeClass = "bg-pink-100 text-pink-800";
-                                  label = `${days}d - MEDIUM`;
-                                }
-                              }
-                              return badgeClass ? (
-                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${badgeClass}`}>
-                                  {label}
-                                </span>
-                              ) : (
-                                "—"
-                              );
-                            })()
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      )}
                     </tr>
                   );
                 })
               )}
             </tbody>
           </table>
-        </section>
+        </section>}
 
         <p className="mt-4 text-center text-xs text-slate-400">
           {data ? `Last refreshed ${new Date(data.fetchedAt).toLocaleString()}` : ""}
@@ -477,12 +453,12 @@ function OpsRmSelect({ value }: { value: string }) {
   const [v, setV] = useState(value);
   return (
     <select
-      value={OPS_RMS.includes(v) ? v : ""}
+      value={OPS_RMS_LOCAL.includes(v) ? v : ""}
       onChange={(e) => setV(e.target.value)}
       className="h-7 rounded border border-slate-200 bg-white px-1.5 text-xs text-slate-700 outline-none focus:border-emerald-500"
     >
       <option value="">— Unassigned —</option>
-      {OPS_RMS.map((rm) => (
+      {OPS_RMS_LOCAL.map((rm) => (
         <option key={rm} value={rm}>
           {rm}
         </option>
@@ -557,8 +533,10 @@ function NewBookingForm({ onSuccess }: { onSuccess: () => void }) {
               min={field.min}
               className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
             />
-            {errors[field.name] && (
-              <span className="mt-1 text-xs text-red-600">{errors[field.name]?.message}</span>
+            {errors[field.name]?.message && (
+              <span className="mt-1 text-xs text-red-600">
+                {errors[field.name]?.message as string}
+              </span>
             )}
           </div>
         ))}
@@ -582,20 +560,20 @@ function NewBookingForm({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function BookingDetailView({ booking, inr }: { booking: Booking; inr: (n: number) => string }) {
+function BookingDetailView({ booking, inr }: { booking: Booking; inr: (n: number | undefined) => string }) {
   const DetailRow = ({
     label,
     value,
     highlight,
   }: {
     label: string;
-    value: string | number;
+    value: string | number | undefined;
     highlight?: boolean;
   }) => (
     <div className={`py-3 px-4 border-b border-slate-100 flex justify-between items-center ${highlight ? "bg-slate-50" : ""}`}>
       <span className="text-sm font-medium text-slate-600">{label}</span>
       <span className={`text-sm font-semibold ${highlight ? "text-emerald-700" : "text-slate-900"}`}>
-        {value}
+        {value ?? "—"}
       </span>
     </div>
   );
