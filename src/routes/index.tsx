@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -66,10 +65,9 @@ function getPriorityColor(priority: CollectionPriority | undefined): string {
 import { DynamicBookingForm } from "@/components/DynamicBookingForm";
 
 function Dashboard() {
-  const fn = useServerFn(fetchBookings);
   const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ["bookings"],
-    queryFn: () => fn(),
+    queryFn: () => fetchBookings(),
     refetchOnWindowFocus: false,
   });
 
@@ -85,8 +83,8 @@ function Dashboard() {
   const [editFormMode, setEditFormMode] = useState<"all" | "payment" | "voucher">("all");
   const [showNewBookingForm, setShowNewBookingForm] = useState(false);
 
-  const addBookingFn = useServerFn(addBookingToSheet);
-  const updateBookingFn = useServerFn(updateBookingInSheet);
+  const addBookingFn = addBookingToSheet;
+  const updateBookingFn = updateBookingInSheet;
 
   // Local storage updated bookings
   const [localUpdatedBookings, setLocalUpdatedBookings] = useState<Record<string, Booking>>(() => {
@@ -102,7 +100,7 @@ function Dashboard() {
 
   const handleEditBooking = async (updatedBooking: Booking, rowValues: string[]) => {
     try {
-      const result = await updateBookingFn({ data: { pn: updatedBooking.pn, values: rowValues } });
+      const result = await updateBookingFn({ pn: updatedBooking.pn, values: rowValues });
       
       if (result && result.status === "success") {
         toast.success(`Booking ${updatedBooking.pn} successfully updated in Google Sheet!`);
@@ -140,7 +138,7 @@ function Dashboard() {
 
   const handleAddBooking = async (newBooking: Booking, rowValues: string[]) => {
     try {
-      const result = await addBookingFn({ data: rowValues });
+      const result = await addBookingFn(rowValues);
       
       if (result && result.status === "success") {
         toast.success(`Booking ${newBooking.pn} successfully synced to Google Sheet!`);
@@ -211,7 +209,7 @@ function Dashboard() {
     toast.info("Saving comment update...");
 
     try {
-      const result = await updateBookingFn({ data: { pn, values: updatedRaw } });
+      const result = await updateBookingFn({ pn, values: updatedRaw });
       if (result && result.status === "success") {
         toast.success(`Comment for ${pn} successfully updated in Google Sheet!`);
       } else if (result && (result.status === "local_only" || !result.status)) {

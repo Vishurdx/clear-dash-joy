@@ -1,6 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
 import Papa from "papaparse";
-import { z } from "zod";
 
 // URL of the Google Sheet CSV export (publicly shared)
 const SHEET_CSV_URL =
@@ -12,7 +10,7 @@ const SHEET_CSV_URL =
 export enum CollectionPriority {
   Critical = "Critical",
   High = "High",
-  Low = "Low"
+  Low = "Low",
 }
 export type Booking = {
   pn: string; // Booking reference number
@@ -69,16 +67,16 @@ export type Booking = {
 export function daysUntil(dateStr: string | undefined | null): number | null {
   if (!dateStr) return null;
   const target = new Date(dateStr);
-  // Removed erroneous React hook
   if (isNaN(target.getTime())) return null;
   const today = new Date();
-  // Reset time components to ignore time‑of‑day differences
+  // Reset time components to ignore time-of-day differences
   today.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
   const diffMs = target.getTime() - today.getTime();
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
   return diffDays;
 }
+
 export function daysSince(dateStr: string | undefined | null): number | null {
   if (!dateStr) return null;
   const target = new Date(dateStr);
@@ -104,9 +102,15 @@ export function inr(amount: number | undefined): string {
 }
 
 /**
- * Server function that fetches the CSV, parses it, and returns a list of bookings.
+ * Fetches the CSV from Google Sheets, parses it, and returns a list of bookings.
+ * Runs in the browser — requires the sheet to be publicly shared.
  */
-export const fetchBookings = createServerFn({ method: "GET" }).handler(async () => {
+export async function fetchBookings(): Promise<{
+  rows: Booking[];
+  headers: string[];
+  uniqueValues: Record<string, string[]>;
+  fetchedAt: string;
+}> {
   const resp = await fetch(SHEET_CSV_URL);
   if (!resp.ok) {
     throw new Error(`Failed to fetch sheet CSV: ${resp.status}`);
@@ -183,7 +187,7 @@ export const fetchBookings = createServerFn({ method: "GET" }).handler(async () 
         preTrip: row[83]?.toString()?.trim() || "",
         daysToTravel: row[92]?.toString()?.trim() || "",
         matrics: row[18]?.toString()?.trim() || "",
-        rawData: row.map((cell) => cell?.toString() || ""),
+        rawData: row.map((cell: any) => cell?.toString() || ""),
       };
     });
 
@@ -210,167 +214,98 @@ export const fetchBookings = createServerFn({ method: "GET" }).handler(async () 
     }
   });
 
-  console.log('Fetched rows count:', rows.length);
+  console.log("Fetched rows count:", rows.length);
 
-  return { 
-    rows, 
-    headers: cleanHeaders, 
-    uniqueValues: uniqueValuesMap, 
-    fetchedAt: new Date().toISOString() 
+  return {
+    rows,
+    headers: cleanHeaders,
+    uniqueValues: uniqueValuesMap,
+    fetchedAt: new Date().toISOString(),
   };
-});
-
-/**
- * Helper to dynamically resolve the VITE_GOOGLE_SCRIPT_URL env variable on the server.
- */
-async function resolveGoogleScriptUrl(): Promise<string> {
-  const logFilePath = "C:/Users/vishw/.gemini/antigravity-ide/brain/55827397-a2b9-4df9-88bc-6f9d9a176ce0/server.log";
-  let logMsg = `[${new Date().toISOString()}] RESOLVING GOOGLE SCRIPT URL:\n`;
-  
-  let url = "";
-
-  // 1. Try reading the .env file directly from disk first to bypass Vite/Process caching
-  try {
-    const fs = await import("node:fs");
-    const path = await import("node:path");
-    const envPath = path.resolve(process.cwd(), ".env");
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, "utf8");
-      const lines = content.split(/\r?\n/);
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith("VITE_GOOGLE_SCRIPT_URL")) {
-          const parts = trimmed.split("=");
-          if (parts.length > 1) {
-            url = parts.slice(1).join("=").trim().replace(/^["']|["']$/g, "");
-            logMsg += `  Parsed directly from .env file: ${url}\n`;
-            break;
-          }
-        }
-      }
-    }
-  } catch (err: any) {
-    logMsg += `  Disk read error: ${err.message}\n`;
-  }
-
-  // 2. Fallback to process/import env if disk read failed or was empty
-  if (!url) {
-    try {
-      url = 
-        import.meta.env.VITE_GOOGLE_SCRIPT_URL || 
-        process.env.VITE_GOOGLE_SCRIPT_URL || 
-        process.env.GOOGLE_SCRIPT_URL || "";
-      logMsg += `  Fallback check (Vite/Process): ${url ? "Found" : "Not Found"}\n`;
-    } catch (err: any) {
-      logMsg += `  Fallback check error: ${err.message}\n`;
-    }
-  }
-
-  // Write log to file
-  try {
-    const fs = await import("node:fs");
-    fs.appendFileSync(logFilePath, logMsg + `  Final Resolved URL: ${url ? "Resolved successfully: " + url : "Failed to resolve"}\n\n`);
-  } catch (e) {}
-
-  return url;
 }
 
 /**
- * Server function to append a new booking row to Google Sheets via the Apps Script Web App.
+ * Appends a new booking row to Google Sheets via the Apps Script Web App.
+ * The script URL must be set in VITE_GOOGLE_SCRIPT_URL env var.
  */
-export const addBookingToSheet = createServerFn({ method: "POST" })
-  .validator(z.array(z.string()))
-  .handler(async ({ data: rowValues }) => {
-    const url = await resolveGoogleScriptUrl();
+export async function addBookingToSheet(rowValues: string[]): Promise<{ status: string; message?: string }> {
+  const url = import.meta.env.VITE_GOOGLE_SCRIPT_URL as string | undefined;
 
-    if (!url) {
-      console.warn("VITE_GOOGLE_SCRIPT_URL is not set. Saving locally only.");
-      return { status: "local_only" };
-    }
+  if (!url) {
+    console.warn("VITE_GOOGLE_SCRIPT_URL is not set. Saving locally only.");
+    return { status: "local_only" };
+  }
 
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "appendRow",
-          values: rowValues,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Google Script Web App returned status ${response.status}`);
-      }
-
-      const resText = await response.text();
-      let resJson;
-      try {
-        resJson = JSON.parse(resText);
-      } catch (e) {
-        if (resText.includes("completed but did not return anything")) {
-          throw new Error("Your Google Apps Script Web App does not support the 'appendRow' action or completed without returning. Please check your Apps Script code.");
-        }
-        throw new Error(`Failed to parse Google Script response: ${resText}`);
-      }
-
-      return resJson;
-    } catch (err: any) {
-      console.error("Error writing to Google Sheet via Apps Script:", err);
-      throw new Error(`Failed to save booking to Google Sheet: ${err.message}`);
-    }
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=UTF-8",
+    },
+    body: JSON.stringify({
+      action: "appendRow",
+      values: rowValues,
+    }),
   });
+
+  if (!response.ok) {
+    throw new Error(`Google Script Web App returned status ${response.status}`);
+  }
+
+  const resText = await response.text();
+  try {
+    return JSON.parse(resText);
+  } catch {
+    if (resText.includes("completed but did not return anything")) {
+      throw new Error(
+        "Your Google Apps Script Web App does not support the 'appendRow' action or completed without returning. Please check your Apps Script code.",
+      );
+    }
+    throw new Error(`Failed to parse Google Script response: ${resText}`);
+  }
+}
 
 /**
- * Server function to update an existing booking row in Google Sheets via the Apps Script Web App.
+ * Updates an existing booking row in Google Sheets via the Apps Script Web App.
  */
-export const updateBookingInSheet = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      pn: z.string(),
-      values: z.array(z.string()),
-    })
-  )
-  .handler(async ({ data: { pn, values } }) => {
-    const url = await resolveGoogleScriptUrl();
+export async function updateBookingInSheet({
+  pn,
+  values,
+}: {
+  pn: string;
+  values: string[];
+}): Promise<{ status: string; message?: string }> {
+  const url = import.meta.env.VITE_GOOGLE_SCRIPT_URL as string | undefined;
 
-    if (!url) {
-      console.warn("VITE_GOOGLE_SCRIPT_URL is not set. Saving locally only.");
-      return { status: "local_only" };
-    }
+  if (!url) {
+    console.warn("VITE_GOOGLE_SCRIPT_URL is not set. Saving locally only.");
+    return { status: "local_only" };
+  }
 
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "updateRow",
-          pn,
-          values,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Google Script Web App returned status ${response.status}`);
-      }
-
-      const resText = await response.text();
-      let resJson;
-      try {
-        resJson = JSON.parse(resText);
-      } catch (e) {
-        if (resText.includes("completed but did not return anything")) {
-          throw new Error("Your Google Apps Script Web App does not support the 'updateRow' action. Please update your spreadsheet's Script Editor with the doPost code that supports updating rows, then deploy as a New Deployment.");
-        }
-        throw new Error(`Failed to parse Google Script response: ${resText}`);
-      }
-
-      return resJson;
-    } catch (err: any) {
-      console.error("Error updating Google Sheet via Apps Script:", err);
-      throw new Error(`Failed to update booking in Google Sheet: ${err.message}`);
-    }
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=UTF-8",
+    },
+    body: JSON.stringify({
+      action: "updateRow",
+      pn,
+      values,
+    }),
   });
+
+  if (!response.ok) {
+    throw new Error(`Google Script Web App returned status ${response.status}`);
+  }
+
+  const resText = await response.text();
+  try {
+    return JSON.parse(resText);
+  } catch {
+    if (resText.includes("completed but did not return anything")) {
+      throw new Error(
+        "Your Google Apps Script Web App does not support the 'updateRow' action. Please update your spreadsheet's Script Editor with the doPost code that supports updating rows, then deploy as a New Deployment.",
+      );
+    }
+    throw new Error(`Failed to parse Google Script response: ${resText}`);
+  }
+}
