@@ -21,7 +21,7 @@ import {
 /**
  * Voucher Release Dashboard redesigned with a simple, operations-first workflow.
  */
-export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]; isLoading: boolean }) {
+export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bookings: Booking[]; isLoading: boolean; onSelectBooking?: (booking: Booking, mode: "voucher") => void }) {
   const [quickFilter, setQuickFilter] = useState<"dot-15" | "dot-7" | "dot-3" | null>(null);
   const [search, setSearch] = useState<string>("");
   const [activeModal, setActiveModal] = useState<"flight-not-shared" | "hotel-not-shared" | "final-not-shared" | "critical-pending" | null>(null);
@@ -106,6 +106,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
         return tdA - tdB;
       });
   }, [bookings]);
+
 
   // Card calculations based only on future bookings
   const cardsData = useMemo(() => {
@@ -192,7 +193,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
     return (
       <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white">
         <div className="text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
           <p className="mt-2 text-sm text-slate-500">Loading operations panel...</p>
         </div>
       </div>
@@ -245,7 +246,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
           className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm cursor-pointer hover:bg-slate-50/50 hover:shadow-md transition-all duration-150"
         >
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Final Voucher Not Shared</div>
-          <div className="mt-2 text-2xl font-bold text-emerald-600">{cardsData.finalVoucherNotSharedCount}</div>
+          <div className="mt-2 text-2xl font-bold text-orange-600">{cardsData.finalVoucherNotSharedCount}</div>
         </div>
 
         {/* 4. Critical Voucher Pending (Clickable) */}
@@ -262,14 +263,14 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-slate-500 mr-1 uppercase tracking-wider">Quick Filters:</span>
-          
+
           {/* DOT <= 15 days */}
           <button
             onClick={() => setQuickFilter(quickFilter === "dot-15" ? null : "dot-15")}
-            className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-semibold shadow-sm transition ${
+            className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold shadow-sm transition active:scale-95 duration-200 cursor-pointer ${
               quickFilter === "dot-15"
-                ? "bg-slate-800 text-white"
-                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20"
+                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >
             DOT ≤ 15 Days + Pending
@@ -278,10 +279,10 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
           {/* DOT <= 7 days (Orange) */}
           <button
             onClick={() => setQuickFilter(quickFilter === "dot-7" ? null : "dot-7")}
-            className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-semibold shadow-sm transition ${
+            className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold shadow-sm transition active:scale-95 duration-200 cursor-pointer ${
               quickFilter === "dot-7"
-                ? "bg-orange-500 text-white"
-                : "border border-orange-200 bg-orange-50/50 text-orange-700 hover:bg-orange-100/70"
+                ? "bg-orange-600 text-white shadow-sm shadow-orange-600/20"
+                : "border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100/70"
             }`}
           >
             DOT ≤ 7 Days + Pending
@@ -290,10 +291,10 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
           {/* DOT <= 3 days (Red critical) */}
           <button
             onClick={() => setQuickFilter(quickFilter === "dot-3" ? null : "dot-3")}
-            className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-semibold shadow-sm transition ${
+            className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold shadow-sm transition active:scale-95 duration-200 cursor-pointer ${
               quickFilter === "dot-3"
-                ? "bg-red-600 text-white animate-pulse"
-                : "border border-red-200 bg-red-50/50 text-red-700 hover:bg-red-100/70"
+                ? "bg-red-600 text-white animate-pulse shadow-sm shadow-red-600/25"
+                : "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100/70"
             }`}
           >
             DOT ≤ 3 Days + Pending
@@ -317,29 +318,29 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search Pax name, PN or destination..."
-            className="w-full h-9 rounded-lg border border-slate-200 pl-9 pr-3 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 shadow-sm"
+            className="w-full h-9 rounded-lg border border-slate-200 pl-9 pr-3 text-xs bg-white focus:outline-none hover:border-orange-500/50 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all duration-200 shadow-sm"
           />
         </div>
       </div>
 
       {/* Main Operational Table */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-sm hover:shadow-md transition-shadow duration-300">
         <table className="min-w-[1500px] w-full text-xs">
-          <thead className="bg-slate-50 text-left text-slate-500 font-bold border-b border-slate-200">
+          <thead className="bg-[#141b2b] text-left text-[10px] font-bold uppercase tracking-wider text-slate-300 border-b border-slate-800">
             <tr>
-              <th className="px-4 py-3">Lead Name</th>
-              <th className="px-4 py-3">PN</th>
-              <th className="px-4 py-3">Destination</th>
-              <th className="px-4 py-3">Travel Date</th>
-              <th className="px-4 py-3">Installment 1 Status</th>
-              <th className="px-4 py-3">Installment 2 Status</th>
-              <th className="px-4 py-3">Installment 3 Status</th>
-              <th className="px-4 py-3 text-center">Flight Included</th>
-              <th className="px-4 py-3 text-center">Hotel Included</th>
-              <th className="px-4 py-3 text-center">Flight Voucher Status</th>
-              <th className="px-4 py-3 text-center">Hotel Voucher Status</th>
-              <th className="px-4 py-3 text-center">Final Voucher Status</th>
-              <th className="px-4 py-3">Assigned RM</th>
+              <th className="px-4 py-3.5 font-bold">Lead Name</th>
+              <th className="px-4 py-3.5 font-bold">PN</th>
+              <th className="px-4 py-3.5 font-bold">Destination</th>
+              <th className="px-4 py-3.5 font-bold">Travel Date</th>
+              <th className="px-4 py-3.5 font-bold">Installment 1 Status</th>
+              <th className="px-4 py-3.5 font-bold">Installment 2 Status</th>
+              <th className="px-4 py-3.5 font-bold">Installment 3 Status</th>
+              <th className="px-4 py-3.5 font-bold text-center">Flight Included</th>
+              <th className="px-4 py-3.5 font-bold text-center">Hotel Included</th>
+              <th className="px-4 py-3.5 font-bold text-center">Flight Voucher Status</th>
+              <th className="px-4 py-3.5 font-bold text-center">Hotel Voucher Status</th>
+              <th className="px-4 py-3.5 font-bold text-center">Final Voucher Status</th>
+              <th className="px-4 py-3.5 font-bold">Assigned RM</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -355,7 +356,14 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                   <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">
                     {b.leadPax || "—"}
                   </td>
-                  <td className="px-4 py-3 font-medium text-slate-600">{b.pn}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <button
+                      onClick={() => onSelectBooking?.(b, "voucher")}
+                      className="font-medium text-orange-700 hover:text-orange-900 hover:underline cursor-pointer"
+                    >
+                      {b.pn}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
                       {b.destination || "—"}
@@ -378,7 +386,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 font-medium ${
                       b.inst1Received
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                        ? "bg-orange-50 text-orange-700 border border-orange-100"
                         : "bg-slate-50 text-slate-400 border border-slate-100"
                     }`}>
                       {b.inst1Received && <CheckCircle2 className="h-3 w-3" />}
@@ -388,7 +396,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 font-medium ${
                       b.inst2Received
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                        ? "bg-orange-50 text-orange-700 border border-orange-100"
                         : "bg-slate-50 text-slate-400 border border-slate-100"
                     }`}>
                       {b.inst2Received && <CheckCircle2 className="h-3 w-3" />}
@@ -398,7 +406,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 font-medium ${
                       b.inst3Received
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                        ? "bg-orange-50 text-orange-700 border border-orange-100"
                         : "bg-slate-50 text-slate-400 border border-slate-100"
                     }`}>
                       {b.inst3Received && <CheckCircle2 className="h-3 w-3" />}
@@ -425,7 +433,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                     {!b.flightIncluded ? (
                       <span className="text-slate-300">—</span>
                     ) : b.flightVoucherShared ? (
-                      <span className="inline-flex rounded bg-emerald-50 border border-emerald-200 px-2 py-1 font-bold text-emerald-700">
+                      <span className="inline-flex rounded bg-orange-50 border border-orange-200 px-2 py-1 font-bold text-orange-700">
                         Shared
                       </span>
                     ) : b.isFlightEligible ? (
@@ -444,7 +452,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                     {!b.hotelIncluded ? (
                       <span className="text-slate-300">—</span>
                     ) : b.hotelVoucherShared ? (
-                      <span className="inline-flex rounded bg-emerald-50 border border-emerald-200 px-2 py-1 font-bold text-emerald-700">
+                      <span className="inline-flex rounded bg-orange-50 border border-orange-200 px-2 py-1 font-bold text-orange-700">
                         Shared
                       </span>
                     ) : b.isHotelEligible ? (
@@ -461,7 +469,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                   {/* Final Voucher */}
                   <td className="px-4 py-3 text-center whitespace-nowrap">
                     {b.finalVoucherShared ? (
-                      <span className="inline-flex rounded bg-emerald-50 border border-emerald-200 px-2 py-1 font-bold text-emerald-700">
+                      <span className="inline-flex rounded bg-orange-50 border border-orange-200 px-2 py-1 font-bold text-orange-700">
                         Shared
                       </span>
                     ) : b.isFinalEligible ? (
@@ -552,7 +560,17 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                     ) : (
                       modalBookings.map((b) => (
                         <tr key={b.pn} className="hover:bg-slate-50/50">
-                          <td className="px-3 py-2.5 font-semibold text-slate-700">{b.pn}</td>
+                          <td className="px-3 py-2.5 font-semibold">
+                            <button
+                              onClick={() => {
+                                setActiveModal(null);
+                                onSelectBooking?.(b, "voucher");
+                              }}
+                              className="font-semibold text-orange-700 hover:text-orange-900 hover:underline cursor-pointer"
+                            >
+                              {b.pn}
+                            </button>
+                          </td>
                           <td className="px-3 py-2.5 font-medium text-slate-800">{b.leadPax || "—"}</td>
                           <td className="px-3 py-2.5">{b.destination || "—"}</td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
@@ -566,7 +584,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                           <td className="px-3 py-2.5">
                             <span className={`inline-flex items-center gap-0.5 rounded px-2 py-0.5 font-medium ${
                               b.inst1Received
-                                ? "bg-emerald-50 text-emerald-800 border border-emerald-100"
+                                ? "bg-orange-50 text-orange-800 border border-orange-100"
                                 : "bg-slate-50 text-slate-400 border border-slate-100"
                             }`}>
                               {b.inst1Received && <CheckCircle2 className="h-3 w-3" />}
@@ -608,7 +626,17 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                     ) : (
                       modalBookings.map((b) => (
                         <tr key={b.pn} className="hover:bg-slate-50/50">
-                          <td className="px-3 py-2.5 font-semibold text-slate-700">{b.pn}</td>
+                          <td className="px-3 py-2.5 font-semibold">
+                            <button
+                              onClick={() => {
+                                setActiveModal(null);
+                                onSelectBooking?.(b, "voucher");
+                              }}
+                              className="font-semibold text-orange-700 hover:text-orange-900 hover:underline cursor-pointer"
+                            >
+                              {b.pn}
+                            </button>
+                          </td>
                           <td className="px-3 py-2.5 font-medium text-slate-800">{b.leadPax || "—"}</td>
                           <td className="px-3 py-2.5">{b.destination || "—"}</td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
@@ -622,7 +650,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                           <td className="px-3 py-2.5">
                             <span className={`inline-flex items-center gap-0.5 rounded px-2 py-0.5 font-medium ${
                               b.inst2Received
-                                ? "bg-emerald-50 text-emerald-800 border border-emerald-100"
+                                ? "bg-orange-50 text-orange-800 border border-orange-100"
                                 : "bg-slate-50 text-slate-400 border border-slate-100"
                             }`}>
                               {b.inst2Received && <CheckCircle2 className="h-3 w-3" />}
@@ -632,7 +660,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                           <td className="px-3 py-2.5">
                             <span className={`inline-flex items-center gap-0.5 rounded px-2 py-0.5 font-medium ${
                               b.inst3Received
-                                ? "bg-emerald-50 text-emerald-800 border border-emerald-100"
+                                ? "bg-orange-50 text-orange-800 border border-orange-100"
                                 : "bg-slate-50 text-slate-400 border border-slate-100"
                             }`}>
                               {b.inst3Received && <CheckCircle2 className="h-3 w-3" />}
@@ -673,7 +701,17 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                     ) : (
                       modalBookings.map((b) => (
                         <tr key={b.pn} className="hover:bg-slate-50/50">
-                          <td className="px-3 py-2.5 font-semibold text-slate-700">{b.pn}</td>
+                          <td className="px-3 py-2.5 font-semibold">
+                            <button
+                              onClick={() => {
+                                setActiveModal(null);
+                                onSelectBooking?.(b, "voucher");
+                              }}
+                              className="font-semibold text-orange-700 hover:text-orange-900 hover:underline cursor-pointer"
+                            >
+                              {b.pn}
+                            </button>
+                          </td>
                           <td className="px-3 py-2.5 font-medium text-slate-800">{b.leadPax || "—"}</td>
                           <td className="px-3 py-2.5">{b.destination || "—"}</td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
@@ -685,7 +723,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                             )}
                           </td>
                           <td className="px-3 py-2.5">
-                            <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 text-emerald-800 px-2 py-0.5 font-medium border border-emerald-100">
+                            <span className="inline-flex items-center gap-0.5 rounded bg-orange-50 text-orange-800 px-2 py-0.5 font-medium border border-orange-100">
                               <CheckCircle2 className="h-3 w-3" />
                               {b.paymentCollected || "Yes"}
                             </span>
@@ -726,7 +764,17 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                     ) : (
                       modalBookings.map((b) => (
                         <tr key={b.pn} className="hover:bg-slate-50/50">
-                          <td className="px-3 py-2.5 font-semibold text-slate-700">{b.pn}</td>
+                          <td className="px-3 py-2.5 font-semibold">
+                            <button
+                              onClick={() => {
+                                setActiveModal(null);
+                                onSelectBooking?.(b, "voucher");
+                              }}
+                              className="font-semibold text-orange-700 hover:text-orange-900 hover:underline cursor-pointer"
+                            >
+                              {b.pn}
+                            </button>
+                          </td>
                           <td className="px-3 py-2.5 font-medium text-slate-800">{b.leadPax || "—"}</td>
                           <td className="px-3 py-2.5">{b.destination || "—"}</td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
@@ -740,7 +788,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                           <td className="px-3 py-2.5 text-center">
                             {b.flightIncluded ? (
                               <span className={`inline-flex rounded px-2 py-0.5 font-semibold ${
-                                b.flightVoucherShared ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-amber-50 text-amber-700 border border-amber-100"
+                                b.flightVoucherShared ? "bg-orange-50 text-orange-700 border border-orange-100" : "bg-amber-50 text-amber-700 border border-amber-100"
                               }`}>
                                 {b.flightVoucher || "Pending"}
                               </span>
@@ -751,7 +799,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                           <td className="px-3 py-2.5 text-center">
                             {b.hotelIncluded ? (
                               <span className={`inline-flex rounded px-2 py-0.5 font-semibold ${
-                                b.hotelVoucherShared ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-amber-50 text-amber-700 border border-amber-100"
+                                b.hotelVoucherShared ? "bg-orange-50 text-orange-700 border border-orange-100" : "bg-amber-50 text-amber-700 border border-amber-100"
                               }`}>
                                 {b.hotelVoucher || "Pending"}
                               </span>
@@ -761,7 +809,7 @@ export function VoucherReleaseTab({ bookings, isLoading }: { bookings: Booking[]
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <span className={`inline-flex rounded px-2 py-0.5 font-semibold ${
-                              b.finalVoucherShared ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-amber-50 text-amber-700 border border-amber-100"
+                              b.finalVoucherShared ? "bg-orange-50 text-orange-700 border border-orange-100" : "bg-amber-50 text-amber-700 border border-amber-100"
                             }`}>
                               {b.finalVoucher || "Pending"}
                             </span>

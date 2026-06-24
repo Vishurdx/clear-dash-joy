@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import Papa from "papaparse";
+import { z } from "zod";
 
 // URL of the Google Sheet CSV export (publicly shared)
 const SHEET_CSV_URL =
@@ -19,18 +20,24 @@ export type Booking = {
   destination: string;
   travelDate: string; // ISO date string (e.g., "2024-12-31")
   freeCancellationDate: string; // "FOC" date
-  installment1Status?: string; // Status for installment 1 (column BK)
-  installment2Date: string; // Due date for installment 2 (column BL)
-  installment2Status: string; // Status for installment 2 (column BN)
-  installment3Date: string; // Due date for installment 3 (column BO)
-  installment3Status: string; // Status for installment 3 (column BQ)
-  paymentCollected: string; // "Yes" / "No" (column BV)
-  pendingAmount: number; // Pending amount (numeric)
+  installment1Date?: string; // Due date for installment 1 (column BH / Index 59)
+  installment1Status?: string; // Status for installment 1 (column BK / Index 62)
+  installment1Amount?: number; // 1st installment amount (BI column / Index 60)
+  installment2Date: string; // Due date for installment 2 (column BL / Index 63)
+  installment2Amount?: number; // Amount for installment 2 (column BM / Index 64)
+  installment2Status: string; // Status for installment 2 (column BN / Index 65)
+  installment3Date: string; // Due date for installment 3 (column BO / Index 66)
+  installment3Amount?: number; // Amount for installment 3 (column BP / Index 67)
+  installment3Status: string; // Status for installment 3 (column BQ / Index 68)
+  paymentCollected: string; // "Yes" / "No" (column BV / Index 73)
+  pendingAmount: number; // Pending amount (numeric / Index 70)
+  totalInstallmentAmount?: number; // Total installment amount (column BT / Index 71)
+  discrepancy?: string; // Discrepancy in cost (column BU / Index 72)
+  paymentReminder?: string; // Payment reminder (column BW / Index 74)
   opsRm: string; // Assigned Relationship Manager
   seller?: string; // Seller column (optional)
   finalVoucher?: string; // Final Voucher column (optional)
   tripStatus?: string; // Trip Status column (optional)
-  installment1Amount?: number; // 1st installment amount (BI column)
   // Additional optional numeric fields used in UI
   adult?: number;
   child?: number;
@@ -49,6 +56,8 @@ export type Booking = {
   landVoucher?: string;
   visaVoucher?: string;
   flightVoucher?: string;
+  dailyUpdates?: string; // Daily updates (column B / Index 1)
+  rawData?: string[]; // Raw cell values array from Google Sheets
   // Additional fields that may exist in the sheet but are not required for the UI
   [key: string]: any;
 };
@@ -132,14 +141,21 @@ export const fetchBookings = createServerFn({ method: "GET" }).handler(async () 
         destination: row[15]?.toString()?.trim() || "",
         travelDate: row[4]?.toString()?.trim() || "",
         freeCancellationDate: row[5]?.toString()?.trim() || "",
+        dailyUpdates: row[1]?.toString()?.trim() || "",
+        installment1Date: row[59]?.toString()?.trim() || "",
         installment1Status: row[62]?.toString()?.trim() || "",
+        installment1Amount: parseNum(row[60]),
         installment2Date: row[63]?.toString()?.trim() || "",
+        installment2Amount: parseNum(row[64]),
         installment2Status: row[65]?.toString()?.trim() || "",
         installment3Date: row[66]?.toString()?.trim() || "",
+        installment3Amount: parseNum(row[67]),
         installment3Status: row[68]?.toString()?.trim() || "",
         paymentCollected: row[73]?.toString()?.trim() || "",
         pendingAmount: parseNum(row[70]),
-        installment1Amount: parseNum(row[60]),
+        totalInstallmentAmount: parseNum(row[71]),
+        discrepancy: row[72]?.toString()?.trim() || "",
+        paymentReminder: row[74]?.toString()?.trim() || "",
         opsRm: row[12]?.toString()?.trim() || "",
         seller: row[19]?.toString()?.trim() || "",
         finalVoucher: row[17]?.toString()?.trim() || "",
@@ -167,10 +183,194 @@ export const fetchBookings = createServerFn({ method: "GET" }).handler(async () 
         preTrip: row[83]?.toString()?.trim() || "",
         daysToTravel: row[92]?.toString()?.trim() || "",
         matrics: row[18]?.toString()?.trim() || "",
+        rawData: row.map((cell) => cell?.toString() || ""),
       };
     });
 
+  const headers = (parsed.data[1] as string[]) || [];
+  const cleanHeaders = headers.map((h) => h?.trim() || "");
+
+  const dataRows = (parsed.data as any[][]).slice(2).filter((row) => {
+    const pn = row[2]?.toString()?.trim() || "";
+    return pn.startsWith("PN-");
+  });
+
+  const uniqueValuesMap: Record<string, string[]> = {};
+  cleanHeaders.forEach((headerName, colIndex) => {
+    if (!headerName) return;
+    const vals = new Set<string>();
+    dataRows.forEach((row) => {
+      const v = row[colIndex]?.toString()?.trim();
+      if (v) {
+        vals.add(v);
+      }
+    });
+    if (vals.size > 0 && vals.size <= 12) {
+      uniqueValuesMap[headerName] = Array.from(vals).sort();
+    }
+  });
+
   console.log('Fetched rows count:', rows.length);
 
-  return { rows, fetchedAt: new Date().toISOString() };
+  return { 
+    rows, 
+    headers: cleanHeaders, 
+    uniqueValues: uniqueValuesMap, 
+    fetchedAt: new Date().toISOString() 
+  };
 });
+
+/**
+ * Helper to dynamically resolve the VITE_GOOGLE_SCRIPT_URL env variable on the server.
+ */
+async function resolveGoogleScriptUrl(): Promise<string> {
+  const logFilePath = "C:/Users/vishw/.gemini/antigravity-ide/brain/55827397-a2b9-4df9-88bc-6f9d9a176ce0/server.log";
+  let logMsg = `[${new Date().toISOString()}] RESOLVING GOOGLE SCRIPT URL:\n`;
+  
+  let url = "";
+
+  // 1. Try reading the .env file directly from disk first to bypass Vite/Process caching
+  try {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const envPath = path.resolve(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf8");
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("VITE_GOOGLE_SCRIPT_URL")) {
+          const parts = trimmed.split("=");
+          if (parts.length > 1) {
+            url = parts.slice(1).join("=").trim().replace(/^["']|["']$/g, "");
+            logMsg += `  Parsed directly from .env file: ${url}\n`;
+            break;
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    logMsg += `  Disk read error: ${err.message}\n`;
+  }
+
+  // 2. Fallback to process/import env if disk read failed or was empty
+  if (!url) {
+    try {
+      url = 
+        import.meta.env.VITE_GOOGLE_SCRIPT_URL || 
+        process.env.VITE_GOOGLE_SCRIPT_URL || 
+        process.env.GOOGLE_SCRIPT_URL || "";
+      logMsg += `  Fallback check (Vite/Process): ${url ? "Found" : "Not Found"}\n`;
+    } catch (err: any) {
+      logMsg += `  Fallback check error: ${err.message}\n`;
+    }
+  }
+
+  // Write log to file
+  try {
+    const fs = await import("node:fs");
+    fs.appendFileSync(logFilePath, logMsg + `  Final Resolved URL: ${url ? "Resolved successfully: " + url : "Failed to resolve"}\n\n`);
+  } catch (e) {}
+
+  return url;
+}
+
+/**
+ * Server function to append a new booking row to Google Sheets via the Apps Script Web App.
+ */
+export const addBookingToSheet = createServerFn({ method: "POST" })
+  .validator(z.array(z.string()))
+  .handler(async ({ data: rowValues }) => {
+    const url = await resolveGoogleScriptUrl();
+
+    if (!url) {
+      console.warn("VITE_GOOGLE_SCRIPT_URL is not set. Saving locally only.");
+      return { status: "local_only" };
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "appendRow",
+          values: rowValues,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Google Script Web App returned status ${response.status}`);
+      }
+
+      const resText = await response.text();
+      let resJson;
+      try {
+        resJson = JSON.parse(resText);
+      } catch (e) {
+        if (resText.includes("completed but did not return anything")) {
+          throw new Error("Your Google Apps Script Web App does not support the 'appendRow' action or completed without returning. Please check your Apps Script code.");
+        }
+        throw new Error(`Failed to parse Google Script response: ${resText}`);
+      }
+
+      return resJson;
+    } catch (err: any) {
+      console.error("Error writing to Google Sheet via Apps Script:", err);
+      throw new Error(`Failed to save booking to Google Sheet: ${err.message}`);
+    }
+  });
+
+/**
+ * Server function to update an existing booking row in Google Sheets via the Apps Script Web App.
+ */
+export const updateBookingInSheet = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      pn: z.string(),
+      values: z.array(z.string()),
+    })
+  )
+  .handler(async ({ data: { pn, values } }) => {
+    const url = await resolveGoogleScriptUrl();
+
+    if (!url) {
+      console.warn("VITE_GOOGLE_SCRIPT_URL is not set. Saving locally only.");
+      return { status: "local_only" };
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "updateRow",
+          pn,
+          values,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Google Script Web App returned status ${response.status}`);
+      }
+
+      const resText = await response.text();
+      let resJson;
+      try {
+        resJson = JSON.parse(resText);
+      } catch (e) {
+        if (resText.includes("completed but did not return anything")) {
+          throw new Error("Your Google Apps Script Web App does not support the 'updateRow' action. Please update your spreadsheet's Script Editor with the doPost code that supports updating rows, then deploy as a New Deployment.");
+        }
+        throw new Error(`Failed to parse Google Script response: ${resText}`);
+      }
+
+      return resJson;
+    } catch (err: any) {
+      console.error("Error updating Google Sheet via Apps Script:", err);
+      throw new Error(`Failed to update booking in Google Sheet: ${err.message}`);
+    }
+  });
