@@ -111,7 +111,7 @@ const VISIBLE_COLUMNS: VisibleColumnDef[] = [
     label: "Final voucher", 
     sheetIndex: 17, 
     type: "select", 
-    options: ["Shared", "Not Shared"] 
+    options: ["Shared", "Not Shared", "Not Applicable"] 
   },
   { key: "Matrics", label: "Matrics", sheetIndex: 18, type: "text", isCalculated: true },
   { 
@@ -504,6 +504,7 @@ export function DynamicBookingForm({ onSubmit, onCancel, booking, onRemove, mode
 
     const pendingVouchers: string[] = [];
     if (finalVoucher?.toLowerCase() === "not shared") pendingVouchers.push("Final voucher");
+    // "Not Applicable" means this booking has no final voucher (e.g. visa-only), so exclude from pending
     if (hotelVoucher?.toLowerCase() === "not shared") pendingVouchers.push("Hotel voucher");
     if (visaVoucher?.toLowerCase() === "not shared") pendingVouchers.push("Visa voucher");
     if (flightVoucher?.toLowerCase() === "not shared") pendingVouchers.push("Flight voucher");
