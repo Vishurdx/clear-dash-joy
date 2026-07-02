@@ -11,13 +11,14 @@ export function MonthlyBookingsTab({
   isLoading: boolean;
   onSelectBooking: (booking: Booking) => void;
 }) {
-  // Extract all unique month-year keys dynamically from the bookings travelDate
+  // Extract all unique month-year keys dynamically from the bookings createdDate
   const monthsList = useMemo(() => {
     const monthsMap: Record<string, { label: string; year: number; month: number }> = {};
     
     for (const b of bookings) {
-      if (!b.travelDate) continue;
-      const d = new Date(b.travelDate);
+      const dateToUse = b.createdDate || b.travelDate;
+      if (!dateToUse) continue;
+      const d = new Date(dateToUse);
       if (isNaN(d.getTime())) continue;
       
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -51,20 +52,21 @@ export function MonthlyBookingsTab({
     }
   }, [monthsList, selectedMonthKey]);
 
-  // Filter bookings for the selected month
+  // Filter bookings for the selected month (by creation date)
   const monthlyBookings = useMemo(() => {
     if (!selectedMonthKey) return [];
     return bookings
       .filter((b) => {
-        if (!b.travelDate) return false;
-        const d = new Date(b.travelDate);
+        const dateToUse = b.createdDate || b.travelDate;
+        if (!dateToUse) return false;
+        const d = new Date(dateToUse);
         if (isNaN(d.getTime())) return false;
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         return key === selectedMonthKey;
       })
       .sort((a, b) => {
-        const dateA = new Date(a.travelDate).getTime();
-        const dateB = new Date(b.travelDate).getTime();
+        const dateA = new Date(a.createdDate || a.travelDate).getTime();
+        const dateB = new Date(b.createdDate || b.travelDate).getTime();
         return dateA - dateB;
       });
   }, [bookings, selectedMonthKey]);
@@ -115,7 +117,7 @@ export function MonthlyBookingsTab({
           </div>
           <div>
             <h2 className="text-base font-bold text-slate-900">Monthly Bookings Workspace</h2>
-            <p className="text-xs text-slate-500">View and track all operational metrics grouped by travel month.</p>
+            <p className="text-xs text-slate-500">View and track all bookings created in a particular month.</p>
           </div>
         </div>
 

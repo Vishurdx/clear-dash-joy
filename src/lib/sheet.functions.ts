@@ -55,6 +55,7 @@ export type Booking = {
   visaVoucher?: string;
   flightVoucher?: string;
   dailyUpdates?: string; // Daily updates (column B / Index 1)
+  createdDate?: string; // Date booking was created (column J / Index 9)
   rawData?: string[]; // Raw cell values array from Google Sheets
   // Additional fields that may exist in the sheet but are not required for the UI
   [key: string]: any;
@@ -146,6 +147,7 @@ export async function fetchBookings(): Promise<{
         travelDate: row[4]?.toString()?.trim() || "",
         freeCancellationDate: row[5]?.toString()?.trim() || "",
         dailyUpdates: row[1]?.toString()?.trim() || "",
+        createdDate: row[9]?.toString()?.trim() || "",
         installment1Date: row[59]?.toString()?.trim() || "",
         installment1Status: row[62]?.toString()?.trim() || "",
         installment1Amount: parseNum(row[60]),

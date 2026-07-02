@@ -600,6 +600,7 @@ export function DynamicBookingForm({ onSubmit, onCancel, booking, onRemove, mode
       travelDate: formatToSheetDate(formData["Date of Travel"]),
       freeCancellationDate: formatToSheetDate(formData["Free Cancellation Date"]),
       dailyUpdates: formData["Daily updates"] || "",
+      createdDate: formatToSheetDate(formData["Booking created date"]),
       installment1Date: formatToSheetDate(formData["Due date (Installment 1)"]),
       installment1Status: formData["Installment 1 status"] || "Not Received",
       installment1Amount: parseNum(formData["Instalment 1"]),
