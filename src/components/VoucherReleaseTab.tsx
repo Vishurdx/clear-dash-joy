@@ -43,8 +43,15 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
            hotelVoucherLower !== "not applicable" &&
            hotelVoucherLower !== "n/a");
 
-        const flightVoucherShared = b.flightVoucher?.toLowerCase() === "shared";
-        const hotelVoucherShared = b.hotelVoucher?.toLowerCase() === "shared";
+        const flightVoucherShared =
+          flightVoucherLower === "shared" ||
+          flightVoucherLower === "not applicable" ||
+          flightVoucherLower === "n/a";
+
+        const hotelVoucherShared =
+          hotelVoucherLower === "shared" ||
+          hotelVoucherLower === "not applicable" ||
+          hotelVoucherLower === "n/a";
         // Treat "Not Applicable" as satisfied — visa-only bookings have no final voucher
         const finalVoucherNA = b.finalVoucher?.toLowerCase() === "not applicable";
         const finalVoucherShared = b.finalVoucher?.toLowerCase() === "shared" || finalVoucherNA;
@@ -72,8 +79,11 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
         const isHotelEligible = hotelIncluded && inst2Received && !hotelVoucherShared;
         const isFinalEligible = finalPaymentCollected && !finalVoucherShared;
 
-        // Voucher pending criteria: finalVoucherShared already includes "Not Applicable" as satisfied
-        const hasVoucherPending = (hotelIncluded && !hotelVoucherShared) || !finalVoucherShared;
+        // Voucher pending criteria
+        const hasVoucherPending =
+          (flightIncluded && !flightVoucherShared) ||
+          (hotelIncluded && !hotelVoucherShared) ||
+          !finalVoucherShared;
 
         return {
           ...b,
@@ -432,7 +442,11 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                   
                   {/* Flight Voucher */}
                   <td className="px-4 py-3 text-center whitespace-nowrap">
-                    {!b.flightIncluded ? (
+                    {b.flightVoucher?.toLowerCase() === "not applicable" || b.flightVoucher?.toLowerCase() === "n/a" ? (
+                      <span className="inline-flex rounded bg-slate-100 border border-slate-300 px-2 py-1 font-bold text-slate-500">
+                        N/A
+                      </span>
+                    ) : !b.flightIncluded ? (
                       <span className="text-slate-300">—</span>
                     ) : b.flightVoucherShared ? (
                       <span className="inline-flex rounded bg-orange-50 border border-orange-200 px-2 py-1 font-bold text-orange-700">
@@ -451,7 +465,11 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
 
                   {/* Hotel Voucher */}
                   <td className="px-4 py-3 text-center whitespace-nowrap">
-                    {!b.hotelIncluded ? (
+                    {b.hotelVoucher?.toLowerCase() === "not applicable" || b.hotelVoucher?.toLowerCase() === "n/a" ? (
+                      <span className="inline-flex rounded bg-slate-100 border border-slate-300 px-2 py-1 font-bold text-slate-500">
+                        N/A
+                      </span>
+                    ) : !b.hotelIncluded ? (
                       <span className="text-slate-300">—</span>
                     ) : b.hotelVoucherShared ? (
                       <span className="inline-flex rounded bg-orange-50 border border-orange-200 px-2 py-1 font-bold text-orange-700">
@@ -792,7 +810,11 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-center">
-                            {b.flightIncluded ? (
+                            {b.flightVoucher?.toLowerCase() === "not applicable" || b.flightVoucher?.toLowerCase() === "n/a" ? (
+                              <span className="inline-flex rounded px-2 py-0.5 font-semibold bg-slate-100 text-slate-500 border border-slate-300">
+                                N/A
+                              </span>
+                            ) : b.flightIncluded ? (
                               <span className={`inline-flex rounded px-2 py-0.5 font-semibold ${
                                 b.flightVoucherShared ? "bg-orange-50 text-orange-700 border border-orange-100" : "bg-amber-50 text-amber-700 border border-amber-100"
                               }`}>
@@ -803,7 +825,11 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-center">
-                            {b.hotelIncluded ? (
+                            {b.hotelVoucher?.toLowerCase() === "not applicable" || b.hotelVoucher?.toLowerCase() === "n/a" ? (
+                              <span className="inline-flex rounded px-2 py-0.5 font-semibold bg-slate-100 text-slate-500 border border-slate-300">
+                                N/A
+                              </span>
+                            ) : b.hotelIncluded ? (
                               <span className={`inline-flex rounded px-2 py-0.5 font-semibold ${
                                 b.hotelVoucherShared ? "bg-orange-50 text-orange-700 border border-orange-100" : "bg-amber-50 text-amber-700 border border-amber-100"
                               }`}>

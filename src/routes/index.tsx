@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { PaymentTrackerTab } from "@/components/PaymentTrackerTab";
 import { VoucherReleaseTab } from "@/components/VoucherReleaseTab";
 import { DailyReportTab } from "@/components/DailyReportTab";
+import { MonthlyBookingsTab } from "@/components/MonthlyBookingsTab";
 import { Compass, Plus, RefreshCw } from "lucide-react";
 import {
   Dialog,
@@ -78,7 +79,7 @@ function Dashboard() {
   const [paymentStatus, setPaymentStatus] = useState("");
   const [daysFilter, setDaysFilter] = useState("");
   const [hideDropped, setHideDropped] = useState(false);
-  const [tab, setTab] = useState<"all" | "payment" | "voucher" | "report">("all");
+  const [tab, setTab] = useState<"all" | "payment" | "voucher" | "report" | "monthly">("all");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [editFormMode, setEditFormMode] = useState<"all" | "payment" | "voucher">("all");
   const [showNewBookingForm, setShowNewBookingForm] = useState(false);
@@ -450,6 +451,7 @@ function Dashboard() {
               ["payment", "Payment Tracker"],
               ["voucher", "Voucher Release"],
               ["report", "Daily Report"],
+              ["monthly", "Monthly Bookings"],
             ] as const).map(([k, label]) => (
               <button
                 key={k}
@@ -505,6 +507,20 @@ function Dashboard() {
                 setSelectedBooking(b);
               }} 
               onUpdateComment={handleUpdateComment}
+            />
+          </section>
+        )}
+
+        {/* Monthly Bookings Command Center */}
+        {tab === "monthly" && (
+          <section className="mt-3">
+            <MonthlyBookingsTab 
+              bookings={globalFiltered} 
+              isLoading={isLoading} 
+              onSelectBooking={(b) => {
+                setEditFormMode("all");
+                setSelectedBooking(b);
+              }} 
             />
           </section>
         )}
