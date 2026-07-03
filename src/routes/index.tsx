@@ -8,6 +8,7 @@ import { PaymentTrackerTab } from "@/components/PaymentTrackerTab";
 import { VoucherReleaseTab } from "@/components/VoucherReleaseTab";
 import { DailyReportTab } from "@/components/DailyReportTab";
 import { MonthlyBookingsTab } from "@/components/MonthlyBookingsTab";
+import { CallReportTab } from "@/components/CallReportTab";
 import { Compass, Plus, RefreshCw } from "lucide-react";
 import {
   Dialog,
@@ -79,7 +80,7 @@ function Dashboard() {
   const [paymentStatus, setPaymentStatus] = useState("");
   const [daysFilter, setDaysFilter] = useState("");
   const [hideDropped, setHideDropped] = useState(false);
-  const [tab, setTab] = useState<"all" | "payment" | "voucher" | "report" | "monthly">("all");
+  const [tab, setTab] = useState<"all" | "payment" | "voucher" | "report" | "monthly" | "call-report">("all");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [editFormMode, setEditFormMode] = useState<"all" | "payment" | "voucher">("all");
   const [showNewBookingForm, setShowNewBookingForm] = useState(false);
@@ -452,6 +453,7 @@ function Dashboard() {
               ["voucher", "Voucher Release"],
               ["report", "Daily Report"],
               ["monthly", "Monthly Bookings"],
+              ["call-report", "Call Report"],
             ] as const).map(([k, label]) => (
               <button
                 key={k}
@@ -521,6 +523,16 @@ function Dashboard() {
                 setEditFormMode("all");
                 setSelectedBooking(b);
               }} 
+            />
+          </section>
+        )}
+
+        {/* Call Report Command Center */}
+        {tab === "call-report" && (
+          <section className="mt-3">
+            <CallReportTab 
+              bookings={rows} 
+              isLoading={isLoading} 
             />
           </section>
         )}
