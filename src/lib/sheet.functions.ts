@@ -56,6 +56,8 @@ export type Booking = {
   flightVoucher?: string;
   dailyUpdates?: string; // Daily updates (column B / Index 1)
   createdDate?: string; // Date booking was created (column J / Index 9)
+  firstCallStatus?: string; // (column Z / Index 25)
+  postBookingCalls?: string; // (column CF / Index 81)
   rawData?: string[]; // Raw cell values array from Google Sheets
   // Additional fields that may exist in the sheet but are not required for the UI
   [key: string]: any;
@@ -166,6 +168,8 @@ export async function fetchBookings(): Promise<{
         seller: row[19]?.toString()?.trim() || "",
         finalVoucher: row[17]?.toString()?.trim() || "",
         tripStatus: row[84]?.toString()?.trim() || "",
+        firstCallStatus: row[25]?.toString()?.trim() || "",
+        postBookingCalls: row[81]?.toString()?.trim() || "",
 
         // Adults, child, infant
         adult: parseNum(row[6]),

@@ -227,6 +227,56 @@ function Dashboard() {
     refetch();
   };
 
+  const handleUpdateCallStatus = async (booking: Booking, taskNumber: number, completed: boolean) => {
+    const updatedRaw = [...(booking.rawData || [])];
+    while (updatedRaw.length < 94) {
+      updatedRaw.push("");
+    }
+
+    let indexToUpdate = -1;
+    if (taskNumber === 1) indexToUpdate = 25; // 1st Call status
+    else if (taskNumber === 2) indexToUpdate = 81; // Post Booking calls
+    else if (taskNumber === 3) indexToUpdate = 83; // Pre Trip
+
+    if (indexToUpdate !== -1) {
+      updatedRaw[indexToUpdate] = completed ? "Done" : "";
+    }
+
+    const updatedBooking: Booking = {
+      ...booking,
+      rawData: updatedRaw,
+      firstCallStatus: taskNumber === 1 ? (completed ? "Done" : "") : booking.firstCallStatus,
+      postBookingCalls: taskNumber === 2 ? (completed ? "Done" : "") : booking.postBookingCalls,
+      preTrip: taskNumber === 3 ? (completed ? "Done" : "") : booking.preTrip,
+      updatedAt: Date.now()
+    };
+
+    const updatedLocally = {
+      ...localUpdatedBookings,
+      [booking.pn]: updatedBooking,
+    };
+    setLocalUpdatedBookings(updatedLocally);
+    localStorage.setItem("local_updated_bookings", JSON.stringify(updatedLocally));
+
+    toast.info(`Syncing call status update to Google Sheet...`);
+
+    try {
+      const result = await updateBookingFn({ pn: booking.pn, values: updatedRaw });
+      if (result && result.status === "success") {
+        toast.success(`Call status for ${booking.pn} successfully synced to Google Sheet!`);
+      } else if (result && (result.status === "local_only" || !result.status)) {
+        toast.warning(`Saved locally. Configure VITE_GOOGLE_SCRIPT_URL to sync to Google Sheet.`);
+      } else if (result && result.status === "error") {
+        toast.error(`Failed to sync update to Google Sheet: ${result.message}`);
+      }
+    } catch (err: any) {
+      console.error("Failed to sync call status update to Google Sheet:", err);
+      toast.error(`Saved locally. Google Sheet sync failed: ${err.message}`);
+    }
+
+    refetch();
+  };
+
   const cleanHeaders = data?.headers || [];
   const uniqueValues = data?.uniqueValues || {};
   const fetchedRows = data?.rows ?? [];
@@ -533,6 +583,7 @@ function Dashboard() {
             <CallReportTab 
               bookings={rows} 
               isLoading={isLoading} 
+              onToggleCallStatus={handleUpdateCallStatus}
             />
           </section>
         )}

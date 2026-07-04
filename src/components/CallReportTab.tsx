@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { type Booking, inr } from "@/lib/sheet.functions";
+import { type Booking } from "@/lib/sheet.functions";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,6 @@ import {
   Filter,
   CheckCircle2,
   Clock,
-  User,
   MapPin,
   CheckSquare,
   Square
@@ -39,7 +38,7 @@ function isCreatedOnOrAfterJuly3_2026(createdDateStr: string | undefined): boole
   if (!createdDate) return false;
   
   createdDate.setHours(0, 0, 0, 0);
-  const boundary = new Date(2026, 6, 3); // July 3, 2026 (0-indexed month)
+  const boundary = new Date(2026, 6, 3); // July 3, 2026
   boundary.setHours(0, 0, 0, 0);
   
   return createdDate.getTime() >= boundary.getTime();
@@ -48,9 +47,11 @@ function isCreatedOnOrAfterJuly3_2026(createdDateStr: string | undefined): boole
 export function CallReportTab({
   bookings,
   isLoading,
+  onToggleCallStatus,
 }: {
   bookings: Booking[];
   isLoading: boolean;
+  onToggleCallStatus: (booking: Booking, taskNumber: number, completed: boolean) => void;
 }) {
   // 1. Filter bookings: only created on or after July 3, 2026, and exclude dropped ones
   const activeBookings = useMemo(() => {
@@ -69,23 +70,7 @@ export function CallReportTab({
   const [selectedDest, setSelectedDest] = useState<string>("");
   const [selectedBookingForModal, setSelectedBookingForModal] = useState<Booking | null>(null);
 
-  // Load call completion state from LocalStorage
-  const [completedMap, setCompletedMap] = useState<Record<string, boolean>>(() => {
-    try {
-      const stored = localStorage.getItem("call_tasks_completed");
-      return stored ? JSON.parse(stored) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  const toggleTaskCompleted = (taskId: string) => {
-    const next = { ...completedMap, [taskId]: !completedMap[taskId] };
-    localStorage.setItem("call_tasks_completed", JSON.stringify(next));
-    setCompletedMap(next);
-  };
-
-  // Define tasks for a single booking
+  // Define tasks for a single booking, reading status directly from parsed booking fields
   const getBookingTasks = (b: Booking) => {
     const createdDate = parseDate(b.createdDate);
     const travelDate = parseDate(b.travelDate);
@@ -114,6 +99,7 @@ export function CallReportTab({
         name: "Naming Quality Check Call",
         dueDate: task1Date,
         dueDateStr: task1Date ? task1Date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—",
+        completed: b.firstCallStatus?.toLowerCase() === "done",
       },
       {
         id: `${b.pn}_2`,
@@ -121,6 +107,7 @@ export function CallReportTab({
         name: "Hotel Confirmation & Installment Call",
         dueDate: task2Date,
         dueDateStr: task2Date ? task2Date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—",
+        completed: b.postBookingCalls?.toLowerCase() === "done",
       },
       {
         id: `${b.pn}_3`,
@@ -128,6 +115,7 @@ export function CallReportTab({
         name: "Final On-Trip Call",
         dueDate: task3Date,
         dueDateStr: task3Date ? task3Date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—",
+        completed: b.preTrip?.toLowerCase() === "done",
       },
     ];
   };
@@ -156,8 +144,7 @@ export function CallReportTab({
       const bCompleted: typeof tasks = [];
 
       for (const t of tasks) {
-        const isCompleted = !!completedMap[t.id];
-        if (isCompleted) {
+        if (t.completed) {
           bCompleted.push(t);
         } else if (t.dueDate && t.dueDate.getTime() <= todayMidnight.getTime()) {
           // Overdue or due today
@@ -174,7 +161,13 @@ export function CallReportTab({
     }
 
     return { pendingList, completedList };
-  }, [filteredBookings, completedMap, todayMidnight]);
+  }, [filteredBookings, todayMidnight]);
+
+  // Sync selected booking for modal from props on updates
+  const activeSelectedBooking = useMemo(() => {
+    if (!selectedBookingForModal) return null;
+    return bookings.find(b => b.pn === selectedBookingForModal.pn) || selectedBookingForModal;
+  }, [bookings, selectedBookingForModal]);
 
   if (isLoading) {
     return (
@@ -273,12 +266,12 @@ export function CallReportTab({
                     {dueTasks.map((t) => (
                       <div
                         key={t.id}
-                        className="flex items-center justify-between bg-rose-50/20 border border-rose-100/50 rounded-md p-2 text-xs"
+                        className="flex items-center justify-between bg-rose-50/20 border border-rose-100/50 rounded-md p-2 text-xs hover:bg-rose-50/30 transition-colors"
                       >
                         <div className="flex items-center gap-2.5 flex-1 mr-3">
                           <button
-                            onClick={() => toggleTaskCompleted(t.id)}
-                            className="text-slate-400 hover:text-rose-600 cursor-pointer flex-shrink-0"
+                            onClick={() => onToggleCallStatus(booking, t.number, true)}
+                            className="text-slate-400 hover:text-orange-600 cursor-pointer flex-shrink-0"
                           >
                             <Square className="h-4.5 w-4.5" />
                           </button>
@@ -344,11 +337,11 @@ export function CallReportTab({
                     {completedTasks.map((t) => (
                       <div
                         key={t.id}
-                        className="flex items-center justify-between bg-emerald-50/20 border border-emerald-100/50 rounded-md p-2 text-xs"
+                        className="flex items-center justify-between bg-emerald-50/20 border border-emerald-100/50 rounded-md p-2 text-xs hover:bg-emerald-50/30 transition-colors"
                       >
                         <div className="flex items-center gap-2.5 flex-1 mr-3">
                           <button
-                            onClick={() => toggleTaskCompleted(t.id)}
+                            onClick={() => onToggleCallStatus(booking, t.number, false)}
                             className="text-emerald-600 hover:text-slate-400 cursor-pointer flex-shrink-0"
                           >
                             <CheckSquare className="h-4.5 w-4.5" />
@@ -371,15 +364,15 @@ export function CallReportTab({
 
       {/* Clickable PN Task Breakdown Modal */}
       <Dialog
-        open={selectedBookingForModal !== null}
+        open={activeSelectedBooking !== null}
         onOpenChange={(open) => !open && setSelectedBookingForModal(null)}
       >
-        {selectedBookingForModal && (
+        {activeSelectedBooking && (
           <DialogContent className="max-w-md">
             <DialogHeader className="border-b border-slate-100 pb-3">
               <DialogTitle className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                 <Phone className="h-4.5 w-4.5 text-orange-600" />
-                <span>PN Call Checklist — {selectedBookingForModal.pn}</span>
+                <span>PN Call Checklist — {activeSelectedBooking.pn}</span>
               </DialogTitle>
             </DialogHeader>
 
@@ -388,19 +381,19 @@ export function CallReportTab({
               <div className="bg-slate-50 rounded-lg p-3 text-xs border border-slate-200/60 grid grid-cols-2 gap-y-2 gap-x-4">
                 <div>
                   <span className="text-slate-400 block font-medium">Lead Pax</span>
-                  <span className="font-bold text-slate-800">{selectedBookingForModal.leadPax}</span>
+                  <span className="font-bold text-slate-800">{activeSelectedBooking.leadPax}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">Destination</span>
-                  <span className="font-bold text-slate-800">{selectedBookingForModal.destination}</span>
+                  <span className="font-bold text-slate-800">{activeSelectedBooking.destination}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">Booking Created</span>
-                  <span className="font-bold text-slate-800">{selectedBookingForModal.createdDate || "—"}</span>
+                  <span className="font-bold text-slate-800">{activeSelectedBooking.createdDate || "—"}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">Travel Date</span>
-                  <span className="font-bold text-slate-800">{selectedBookingForModal.travelDate || "—"}</span>
+                  <span className="font-bold text-slate-800">{activeSelectedBooking.travelDate || "—"}</span>
                 </div>
               </div>
 
@@ -408,13 +401,13 @@ export function CallReportTab({
               <div className="space-y-3.5">
                 <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">Required Calls Process</div>
                 
-                {getBookingTasks(selectedBookingForModal).map((task) => {
-                  const isChecked = !!completedMap[task.id];
+                {getBookingTasks(activeSelectedBooking).map((task) => {
+                  const isChecked = task.completed;
                   
                   return (
                     <div
                       key={task.id}
-                      onClick={() => toggleTaskCompleted(task.id)}
+                      onClick={() => onToggleCallStatus(activeSelectedBooking, task.number, !isChecked)}
                       className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer select-none transition-all duration-200 ${
                         isChecked
                           ? "bg-slate-50/50 border-slate-200 opacity-75"
