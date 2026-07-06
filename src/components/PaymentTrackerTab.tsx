@@ -8,70 +8,48 @@ import {
 } from "@/components/ui/dialog";
 import { CheckCircle2, AlertCircle, Calendar, ShieldAlert, DollarSign, X, MessageSquare, Save } from "lucide-react";
 
-// ─── PN Comment Helpers (localStorage-based) ──────────────────────────────────
-const COMMENT_KEY = "pn_installment_comments";
-
-function loadComments(): Record<string, { text: string; savedAt: string }> {
-  try {
-    const raw = localStorage.getItem(COMMENT_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveComment(pn: string, text: string) {
-  const all = loadComments();
-  all[pn] = { text, savedAt: new Date().toISOString() };
-  localStorage.setItem(COMMENT_KEY, JSON.stringify(all));
-}
-
-function deleteComment(pn: string) {
-  const all = loadComments();
-  delete all[pn];
-  localStorage.setItem(COMMENT_KEY, JSON.stringify(all));
-}
-
 /**
  * Simple payment tracker focused on actionable bookings.
  * Features:
  *  - Quick filters for travel, free cancellation, and installment due dates.
  *  - Clean table showing essential columns.
  */
-export function PaymentTrackerTab({ bookings, isLoading, onSelectBooking }: { bookings: Booking[]; isLoading: boolean; onSelectBooking?: (booking: Booking, mode: "payment") => void }) {
+export function PaymentTrackerTab({
+  bookings,
+  isLoading,
+  onSelectBooking,
+  onUpdateInstallmentComment,
+}: {
+  bookings: Booking[];
+  isLoading: boolean;
+  onSelectBooking?: (booking: Booking, mode: "payment") => void;
+  onUpdateInstallmentComment?: (pn: string, text: string) => void;
+}) {
   const [quickFilter, setQuickFilter] = useState<string>("");
   const [activeModal, setActiveModal] = useState<"dot-30-pending" | "foc-7-pending" | "foc-5-pending" | "foc-3-pending" | "inst2-due-pending" | "inst3-due-pending" | null>(null);
 
   // ── Comment state ──
-  const [allComments, setAllComments] = useState<Record<string, { text: string; savedAt: string }>>(() => loadComments());
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [draftComments, setDraftComments] = useState<Record<string, string>>({});
 
   const toggleComment = useCallback((pn: string) => {
     setExpandedComments((prev) => ({ ...prev, [pn]: !prev[pn] }));
-    // Pre-fill draft with existing comment
+    const bk = bookings.find((b) => b.pn === pn);
     setDraftComments((prev) => ({
       ...prev,
-      [pn]: prev[pn] ?? (loadComments()[pn]?.text || ""),
+      [pn]: prev[pn] ?? (bk?.installmentComment || ""),
     }));
-  }, []);
+  }, [bookings]);
 
   const handleSaveComment = useCallback((pn: string) => {
     const text = draftComments[pn] ?? "";
-    if (text.trim()) {
-      saveComment(pn, text.trim());
-    } else {
-      deleteComment(pn);
-    }
-    const updated = loadComments();
-    setAllComments({ ...updated });
-  }, [draftComments]);
+    onUpdateInstallmentComment?.(pn, text.trim());
+  }, [draftComments, onUpdateInstallmentComment]);
 
   const handleClearComment = useCallback((pn: string) => {
-    deleteComment(pn);
-    setAllComments((prev) => { const n = { ...prev }; delete n[pn]; return n; });
+    onUpdateInstallmentComment?.(pn, "");
     setDraftComments((prev) => ({ ...prev, [pn]: "" }));
-  }, []);
+  }, [onUpdateInstallmentComment]);
 
   // Filter bookings for the payment tracker dashboard:
   // - Exclude dropped bookings
@@ -523,10 +501,10 @@ export function PaymentTrackerTab({ bookings, isLoading, onSelectBooking }: { bo
                   </tr>
                 ) : (
                   modalBookings.map((b) => {
-                    const existing = allComments[b.pn];
+                    const existingText = b.installmentComment || "";
                     const isOpen = expandedComments[b.pn] ?? false;
-                    const draft = draftComments[b.pn] ?? (existing?.text || "");
-                    const hasSaved = !!existing?.text;
+                    const draft = draftComments[b.pn] ?? existingText;
+                    const hasSaved = !!existingText;
 
                     return (
                       <tr key={b.pn} className={`hover:bg-slate-50/50 align-top ${isOpen ? "bg-amber-50/20" : ""}`}>
@@ -595,7 +573,7 @@ export function PaymentTrackerTab({ bookings, isLoading, onSelectBooking }: { bo
                             {/* Collapsed preview */}
                             {!isOpen && hasSaved && (
                               <p className="text-[10px] text-slate-500 italic leading-snug line-clamp-2">
-                                {existing.text}
+                                {existingText}
                               </p>
                             )}
 
@@ -627,11 +605,6 @@ export function PaymentTrackerTab({ bookings, isLoading, onSelectBooking }: { bo
                                     </button>
                                   )}
                                 </div>
-                                {existing?.savedAt && (
-                                  <span className="text-[9px] text-slate-400">
-                                    Last saved: {new Date(existing.savedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                                  </span>
-                                )}
                               </div>
                             )}
                           </div>

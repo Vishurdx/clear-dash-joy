@@ -20,33 +20,9 @@ import {
   Save,
 } from "lucide-react";
 
-// ─── PN Comment Helpers (localStorage-based) ──────────────────────────────────
-const COMMENT_KEY = "pn_voucher_comments";
-
-function loadComments(): Record<string, { text: string; savedAt: string }> {
-  try {
-    const raw = localStorage.getItem(COMMENT_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveComment(pn: string, text: string) {
-  const all = loadComments();
-  all[pn] = { text, savedAt: new Date().toISOString() };
-  localStorage.setItem(COMMENT_KEY, JSON.stringify(all));
-}
-
-function deleteComment(pn: string) {
-  const all = loadComments();
-  delete all[pn];
-  localStorage.setItem(COMMENT_KEY, JSON.stringify(all));
-}
-
 function CommentCell({
   pn,
-  allComments,
+  existingText,
   expandedComments,
   draftComments,
   toggleComment,
@@ -56,7 +32,7 @@ function CommentCell({
   setExpandedComments,
 }: {
   pn: string;
-  allComments: Record<string, { text: string; savedAt: string }>;
+  existingText: string;
   expandedComments: Record<string, boolean>;
   draftComments: Record<string, string>;
   toggleComment: (pn: string) => void;
@@ -65,10 +41,9 @@ function CommentCell({
   handleClearComment: (pn: string) => void;
   setExpandedComments: Dispatch<SetStateAction<Record<string, boolean>>>;
 }) {
-  const existing = allComments[pn];
   const isOpen = expandedComments[pn] ?? false;
-  const draft = draftComments[pn] ?? (existing?.text || "");
-  const hasSaved = !!existing?.text;
+  const draft = draftComments[pn] ?? existingText;
+  const hasSaved = !!existingText;
 
   return (
     <td className="px-3 py-2.5 min-w-[180px]">
@@ -87,7 +62,7 @@ function CommentCell({
 
         {!isOpen && hasSaved && (
           <p className="text-[10px] text-slate-500 italic leading-snug line-clamp-2">
-            {existing.text}
+            {existingText}
           </p>
         )}
 
@@ -118,11 +93,6 @@ function CommentCell({
                 </button>
               )}
             </div>
-            {existing?.savedAt && (
-              <span className="text-[9px] text-slate-400">
-                Last saved: {new Date(existing.savedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-              </span>
-            )}
           </div>
         )}
       </div>
@@ -133,40 +103,43 @@ function CommentCell({
 /**
  * Voucher Release Dashboard redesigned with a simple, operations-first workflow.
  */
-export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bookings: Booking[]; isLoading: boolean; onSelectBooking?: (booking: Booking, mode: "voucher") => void }) {
+export function VoucherReleaseTab({
+  bookings,
+  isLoading,
+  onSelectBooking,
+  onUpdateVoucherComment,
+}: {
+  bookings: Booking[];
+  isLoading: boolean;
+  onSelectBooking?: (booking: Booking, mode: "voucher") => void;
+  onUpdateVoucherComment?: (pn: string, text: string) => void;
+}) {
   const [quickFilter, setQuickFilter] = useState<"dot-15" | "dot-7" | "dot-3" | null>(null);
   const [search, setSearch] = useState<string>("");
   const [activeModal, setActiveModal] = useState<"flight-not-shared" | "hotel-not-shared" | "final-not-shared" | "critical-pending" | null>(null);
 
   // ── Comment state ──
-  const [allComments, setAllComments] = useState<Record<string, { text: string; savedAt: string }>>(() => loadComments());
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [draftComments, setDraftComments] = useState<Record<string, string>>({});
 
   const toggleComment = useCallback((pn: string) => {
     setExpandedComments((prev) => ({ ...prev, [pn]: !prev[pn] }));
+    const bk = bookings.find((b) => b.pn === pn);
     setDraftComments((prev) => ({
       ...prev,
-      [pn]: prev[pn] ?? (loadComments()[pn]?.text || ""),
+      [pn]: prev[pn] ?? (bk?.voucherComment || ""),
     }));
-  }, []);
+  }, [bookings]);
 
   const handleSaveComment = useCallback((pn: string) => {
     const text = draftComments[pn] ?? "";
-    if (text.trim()) {
-      saveComment(pn, text.trim());
-    } else {
-      deleteComment(pn);
-    }
-    const updated = loadComments();
-    setAllComments({ ...updated });
-  }, [draftComments]);
+    onUpdateVoucherComment?.(pn, text.trim());
+  }, [draftComments, onUpdateVoucherComment]);
 
   const handleClearComment = useCallback((pn: string) => {
-    deleteComment(pn);
-    setAllComments((prev) => { const n = { ...prev }; delete n[pn]; return n; });
+    onUpdateVoucherComment?.(pn, "");
     setDraftComments((prev) => ({ ...prev, [pn]: "" }));
-  }, []);
+  }, [onUpdateVoucherComment]);
 
   // Derived milestones for future trips (Travel Date >= Today)
   const enrichedBookings = useMemo(() => {
@@ -766,7 +739,7 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
                           <CommentCell
                             pn={b.pn}
-                            allComments={allComments}
+                            existingText={b.voucherComment || ""}
                             expandedComments={expandedComments}
                             draftComments={draftComments}
                             toggleComment={toggleComment}
@@ -854,7 +827,7 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
                           <CommentCell
                             pn={b.pn}
-                            allComments={allComments}
+                            existingText={b.voucherComment || ""}
                             expandedComments={expandedComments}
                             draftComments={draftComments}
                             toggleComment={toggleComment}
@@ -927,7 +900,7 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
                           <CommentCell
                             pn={b.pn}
-                            allComments={allComments}
+                            existingText={b.voucherComment || ""}
                             expandedComments={expandedComments}
                             draftComments={draftComments}
                             toggleComment={toggleComment}
@@ -1034,7 +1007,7 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
                           <CommentCell
                             pn={b.pn}
-                            allComments={allComments}
+                            existingText={b.voucherComment || ""}
                             expandedComments={expandedComments}
                             draftComments={draftComments}
                             toggleComment={toggleComment}

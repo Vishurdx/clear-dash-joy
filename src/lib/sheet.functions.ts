@@ -58,6 +58,8 @@ export type Booking = {
   createdDate?: string; // Date booking was created (column J / Index 9)
   firstCallStatus?: string; // (column Z / Index 25)
   postBookingCalls?: string; // (column CF / Index 81)
+  installmentComment?: string; // Remarks by vishwajeet (column CF / Index 85)
+  voucherComment?: string; // Comments (column CH / Index 87)
   rawData?: string[]; // Raw cell values array from Google Sheets
   // Additional fields that may exist in the sheet but are not required for the UI
   [key: string]: any;
@@ -193,6 +195,8 @@ export async function fetchBookings(): Promise<{
         preTrip: row[83]?.toString()?.trim() || "",
         daysToTravel: row[92]?.toString()?.trim() || "",
         matrics: row[18]?.toString()?.trim() || "",
+        installmentComment: row[85]?.toString()?.trim() || "",
+        voucherComment: row[87]?.toString()?.trim() || "",
         rawData: row.map((cell: any) => cell?.toString() || ""),
       };
     });
