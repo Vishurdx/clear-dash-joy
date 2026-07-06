@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { type Booking, daysUntil, inr } from "@/lib/sheet.functions";
 import {
   Dialog,
@@ -6,7 +6,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, AlertCircle, Calendar, ShieldAlert, DollarSign, X } from "lucide-react";
+import { CheckCircle2, AlertCircle, Calendar, ShieldAlert, DollarSign, X, MessageSquare, Save } from "lucide-react";
+
+// ─── PN Comment Helpers (localStorage-based) ──────────────────────────────────
+const COMMENT_KEY = "pn_installment_comments";
+
+function loadComments(): Record<string, { text: string; savedAt: string }> {
+  try {
+    const raw = localStorage.getItem(COMMENT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveComment(pn: string, text: string) {
+  const all = loadComments();
+  all[pn] = { text, savedAt: new Date().toISOString() };
+  localStorage.setItem(COMMENT_KEY, JSON.stringify(all));
+}
+
+function deleteComment(pn: string) {
+  const all = loadComments();
+  delete all[pn];
+  localStorage.setItem(COMMENT_KEY, JSON.stringify(all));
+}
 
 /**
  * Simple payment tracker focused on actionable bookings.
@@ -17,6 +41,37 @@ import { CheckCircle2, AlertCircle, Calendar, ShieldAlert, DollarSign, X } from 
 export function PaymentTrackerTab({ bookings, isLoading, onSelectBooking }: { bookings: Booking[]; isLoading: boolean; onSelectBooking?: (booking: Booking, mode: "payment") => void }) {
   const [quickFilter, setQuickFilter] = useState<string>("");
   const [activeModal, setActiveModal] = useState<"dot-30-pending" | "foc-7-pending" | "foc-5-pending" | "foc-3-pending" | "inst2-due-pending" | "inst3-due-pending" | null>(null);
+
+  // ── Comment state ──
+  const [allComments, setAllComments] = useState<Record<string, { text: string; savedAt: string }>>(() => loadComments());
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+  const [draftComments, setDraftComments] = useState<Record<string, string>>({});
+
+  const toggleComment = useCallback((pn: string) => {
+    setExpandedComments((prev) => ({ ...prev, [pn]: !prev[pn] }));
+    // Pre-fill draft with existing comment
+    setDraftComments((prev) => ({
+      ...prev,
+      [pn]: prev[pn] ?? (loadComments()[pn]?.text || ""),
+    }));
+  }, []);
+
+  const handleSaveComment = useCallback((pn: string) => {
+    const text = draftComments[pn] ?? "";
+    if (text.trim()) {
+      saveComment(pn, text.trim());
+    } else {
+      deleteComment(pn);
+    }
+    const updated = loadComments();
+    setAllComments({ ...updated });
+  }, [draftComments]);
+
+  const handleClearComment = useCallback((pn: string) => {
+    deleteComment(pn);
+    setAllComments((prev) => { const n = { ...prev }; delete n[pn]; return n; });
+    setDraftComments((prev) => ({ ...prev, [pn]: "" }));
+  }, []);
 
   // Filter bookings for the payment tracker dashboard:
   // - Exclude dropped bookings
@@ -456,65 +511,134 @@ export function PaymentTrackerTab({ bookings, isLoading, onSelectBooking }: { bo
                   <th className="px-3 py-2.5">Inst 3 Date / Status</th>
                   <th className="px-3 py-2.5">Pending Amount</th>
                   <th className="px-3 py-2.5">Assigned RM</th>
+                  <th className="px-3 py-2.5 min-w-[180px]">Comments / Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {modalBookings.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
+                    <td colSpan={10} className="px-3 py-8 text-center text-slate-400">
                       No matching pending payments.
                     </td>
                   </tr>
                 ) : (
-                  modalBookings.map((b) => (
-                    <tr key={b.pn} className="hover:bg-slate-50/50">
-                      <td className="px-3 py-2.5 font-semibold">
-                        <button
-                          onClick={() => {
-                            setActiveModal(null);
-                            onSelectBooking?.(b, "payment");
-                          }}
-                          className="font-semibold text-orange-600 hover:text-orange-800 hover:underline cursor-pointer"
-                        >
-                          {b.pn}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2.5 font-medium text-slate-800">{b.leadPax || "—"}</td>
-                      <td className="px-3 py-2.5">{b.destination || "—"}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        {b.travelDate || "—"}
-                        {daysUntil(b.travelDate) !== null && (
-                          <span className="ml-1.5 text-[9px] font-bold bg-slate-100 text-slate-600 px-1 py-0.2 rounded">
-                            T-{daysUntil(b.travelDate)}d
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        {b.freeCancellationDate || "—"}
-                        {daysUntil(b.freeCancellationDate) !== null && (
-                          <span className={`ml-1.5 text-[9px] font-bold px-1 py-0.2 rounded ${
-                            daysUntil(b.freeCancellationDate)! <= 3 ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
-                          }`}>
-                            {daysUntil(b.freeCancellationDate)! <= 0 ? "Expired" : `${daysUntil(b.freeCancellationDate)}d`}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-col">
-                          <span>{b.installment2Date || "—"}</span>
-                          <span className="text-[10px] text-slate-400">{b.installment2Status || "—"}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-col">
-                          <span>{b.installment3Date || "—"}</span>
-                          <span className="text-[10px] text-slate-400">{b.installment3Status || "—"}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 font-bold text-slate-900">{inr(b.pendingAmount)}</td>
-                      <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
-                    </tr>
-                  ))
+                  modalBookings.map((b) => {
+                    const existing = allComments[b.pn];
+                    const isOpen = expandedComments[b.pn] ?? false;
+                    const draft = draftComments[b.pn] ?? (existing?.text || "");
+                    const hasSaved = !!existing?.text;
+
+                    return (
+                      <tr key={b.pn} className={`hover:bg-slate-50/50 align-top ${isOpen ? "bg-amber-50/20" : ""}`}>
+                        <td className="px-3 py-2.5 font-semibold">
+                          <button
+                            onClick={() => {
+                              setActiveModal(null);
+                              onSelectBooking?.(b, "payment");
+                            }}
+                            className="font-semibold text-orange-600 hover:text-orange-800 hover:underline cursor-pointer"
+                          >
+                            {b.pn}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2.5 font-medium text-slate-800">{b.leadPax || "—"}</td>
+                        <td className="px-3 py-2.5">{b.destination || "—"}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          {b.travelDate || "—"}
+                          {daysUntil(b.travelDate) !== null && (
+                            <span className="ml-1.5 text-[9px] font-bold bg-slate-100 text-slate-600 px-1 py-0.2 rounded">
+                              T-{daysUntil(b.travelDate)}d
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          {b.freeCancellationDate || "—"}
+                          {daysUntil(b.freeCancellationDate) !== null && (
+                            <span className={`ml-1.5 text-[9px] font-bold px-1 py-0.2 rounded ${
+                              daysUntil(b.freeCancellationDate)! <= 3 ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {daysUntil(b.freeCancellationDate)! <= 0 ? "Expired" : `${daysUntil(b.freeCancellationDate)}d`}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-col">
+                            <span>{b.installment2Date || "—"}</span>
+                            <span className="text-[10px] text-slate-400">{b.installment2Status || "—"}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-col">
+                            <span>{b.installment3Date || "—"}</span>
+                            <span className="text-[10px] text-slate-400">{b.installment3Status || "—"}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 font-bold text-slate-900">{inr(b.pendingAmount)}</td>
+                        <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
+
+                        {/* ── Comment Cell ── */}
+                        <td className="px-3 py-2.5 min-w-[180px]">
+                          <div className="flex flex-col gap-1.5">
+                            {/* Toggle button */}
+                            <button
+                              onClick={() => toggleComment(b.pn)}
+                              className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-semibold border transition-all duration-150 cursor-pointer ${
+                                hasSaved
+                                  ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                                  : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
+                              }`}
+                            >
+                              <MessageSquare className="h-3 w-3" />
+                              {hasSaved ? (isOpen ? "Hide note" : "View/Edit note") : (isOpen ? "Cancel" : "Add note")}
+                            </button>
+
+                            {/* Collapsed preview */}
+                            {!isOpen && hasSaved && (
+                              <p className="text-[10px] text-slate-500 italic leading-snug line-clamp-2">
+                                {existing.text}
+                              </p>
+                            )}
+
+                            {/* Expanded editor */}
+                            {isOpen && (
+                              <div className="flex flex-col gap-1.5 mt-0.5">
+                                <textarea
+                                  rows={3}
+                                  value={draft}
+                                  onChange={(e) =>
+                                    setDraftComments((prev) => ({ ...prev, [b.pn]: e.target.value }))
+                                  }
+                                  placeholder="Type a reason or note for this PN..."
+                                  className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 placeholder-slate-300 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300 resize-none transition-all duration-150"
+                                />
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => { handleSaveComment(b.pn); setExpandedComments((p) => ({ ...p, [b.pn]: false })); }}
+                                    className="inline-flex items-center gap-1 rounded-md bg-orange-500 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-orange-600 transition cursor-pointer"
+                                  >
+                                    <Save className="h-3 w-3" /> Save
+                                  </button>
+                                  {hasSaved && (
+                                    <button
+                                      onClick={() => handleClearComment(b.pn)}
+                                      className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-100 transition cursor-pointer"
+                                    >
+                                      <X className="h-3 w-3" /> Clear
+                                    </button>
+                                  )}
+                                </div>
+                                {existing?.savedAt && (
+                                  <span className="text-[9px] text-slate-400">
+                                    Last saved: {new Date(existing.savedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
