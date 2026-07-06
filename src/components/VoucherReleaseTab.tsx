@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback, Dispatch, SetStateAction } from "react";
 import { type Booking, daysUntil } from "@/lib/sheet.functions";
 import {
   Dialog,
@@ -16,7 +16,119 @@ import {
   X,
   FileText,
   AlertCircle,
+  MessageSquare,
+  Save,
 } from "lucide-react";
+
+// ─── PN Comment Helpers (localStorage-based) ──────────────────────────────────
+const COMMENT_KEY = "pn_voucher_comments";
+
+function loadComments(): Record<string, { text: string; savedAt: string }> {
+  try {
+    const raw = localStorage.getItem(COMMENT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveComment(pn: string, text: string) {
+  const all = loadComments();
+  all[pn] = { text, savedAt: new Date().toISOString() };
+  localStorage.setItem(COMMENT_KEY, JSON.stringify(all));
+}
+
+function deleteComment(pn: string) {
+  const all = loadComments();
+  delete all[pn];
+  localStorage.setItem(COMMENT_KEY, JSON.stringify(all));
+}
+
+function CommentCell({
+  pn,
+  allComments,
+  expandedComments,
+  draftComments,
+  toggleComment,
+  setDraftComments,
+  handleSaveComment,
+  handleClearComment,
+  setExpandedComments,
+}: {
+  pn: string;
+  allComments: Record<string, { text: string; savedAt: string }>;
+  expandedComments: Record<string, boolean>;
+  draftComments: Record<string, string>;
+  toggleComment: (pn: string) => void;
+  setDraftComments: Dispatch<SetStateAction<Record<string, string>>>;
+  handleSaveComment: (pn: string) => void;
+  handleClearComment: (pn: string) => void;
+  setExpandedComments: Dispatch<SetStateAction<Record<string, boolean>>>;
+}) {
+  const existing = allComments[pn];
+  const isOpen = expandedComments[pn] ?? false;
+  const draft = draftComments[pn] ?? (existing?.text || "");
+  const hasSaved = !!existing?.text;
+
+  return (
+    <td className="px-3 py-2.5 min-w-[180px]">
+      <div className="flex flex-col gap-1.5">
+        <button
+          onClick={() => toggleComment(pn)}
+          className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-semibold border transition-all duration-150 cursor-pointer ${
+            hasSaved
+              ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+              : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
+          }`}
+        >
+          <MessageSquare className="h-3 w-3" />
+          {hasSaved ? (isOpen ? "Hide note" : "View/Edit note") : (isOpen ? "Cancel" : "Add note")}
+        </button>
+
+        {!isOpen && hasSaved && (
+          <p className="text-[10px] text-slate-500 italic leading-snug line-clamp-2">
+            {existing.text}
+          </p>
+        )}
+
+        {isOpen && (
+          <div className="flex flex-col gap-1.5 mt-0.5">
+            <textarea
+              rows={3}
+              value={draft}
+              onChange={(e) =>
+                setDraftComments((prev) => ({ ...prev, [pn]: e.target.value }))
+              }
+              placeholder="Type a reason or note for this PN..."
+              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700 placeholder-slate-300 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300 resize-none transition-all duration-150"
+            />
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => { handleSaveComment(pn); setExpandedComments((p) => ({ ...p, [pn]: false })); }}
+                className="inline-flex items-center gap-1 rounded-md bg-orange-500 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-orange-600 transition cursor-pointer"
+              >
+                <Save className="h-3 w-3" /> Save
+              </button>
+              {hasSaved && (
+                <button
+                  onClick={() => handleClearComment(pn)}
+                  className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-100 transition cursor-pointer"
+                >
+                  <X className="h-3 w-3" /> Clear
+                </button>
+              )}
+            </div>
+            {existing?.savedAt && (
+              <span className="text-[9px] text-slate-400">
+                Last saved: {new Date(existing.savedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </td>
+  );
+}
 
 /**
  * Voucher Release Dashboard redesigned with a simple, operations-first workflow.
@@ -25,6 +137,36 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
   const [quickFilter, setQuickFilter] = useState<"dot-15" | "dot-7" | "dot-3" | null>(null);
   const [search, setSearch] = useState<string>("");
   const [activeModal, setActiveModal] = useState<"flight-not-shared" | "hotel-not-shared" | "final-not-shared" | "critical-pending" | null>(null);
+
+  // ── Comment state ──
+  const [allComments, setAllComments] = useState<Record<string, { text: string; savedAt: string }>>(() => loadComments());
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+  const [draftComments, setDraftComments] = useState<Record<string, string>>({});
+
+  const toggleComment = useCallback((pn: string) => {
+    setExpandedComments((prev) => ({ ...prev, [pn]: !prev[pn] }));
+    setDraftComments((prev) => ({
+      ...prev,
+      [pn]: prev[pn] ?? (loadComments()[pn]?.text || ""),
+    }));
+  }, []);
+
+  const handleSaveComment = useCallback((pn: string) => {
+    const text = draftComments[pn] ?? "";
+    if (text.trim()) {
+      saveComment(pn, text.trim());
+    } else {
+      deleteComment(pn);
+    }
+    const updated = loadComments();
+    setAllComments({ ...updated });
+  }, [draftComments]);
+
+  const handleClearComment = useCallback((pn: string) => {
+    deleteComment(pn);
+    setAllComments((prev) => { const n = { ...prev }; delete n[pn]; return n; });
+    setDraftComments((prev) => ({ ...prev, [pn]: "" }));
+  }, []);
 
   // Derived milestones for future trips (Travel Date >= Today)
   const enrichedBookings = useMemo(() => {
@@ -572,18 +714,19 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                       <th className="px-3 py-2.5">Installment 1 Status</th>
                       <th className="px-3 py-2.5">Flight Voucher Status</th>
                       <th className="px-3 py-2.5">Assigned RM</th>
+                      <th className="px-3 py-2.5 min-w-[180px]">Comments / Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {modalBookings.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
+                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
                           No pending flight vouchers.
                         </td>
                       </tr>
                     ) : (
                       modalBookings.map((b) => (
-                        <tr key={b.pn} className="hover:bg-slate-50/50">
+                        <tr key={b.pn} className="hover:bg-slate-50/50 align-top">
                           <td className="px-3 py-2.5 font-semibold">
                             <button
                               onClick={() => {
@@ -621,6 +764,17 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
+                          <CommentCell
+                            pn={b.pn}
+                            allComments={allComments}
+                            expandedComments={expandedComments}
+                            draftComments={draftComments}
+                            toggleComment={toggleComment}
+                            setDraftComments={setDraftComments}
+                            handleSaveComment={handleSaveComment}
+                            handleClearComment={handleClearComment}
+                            setExpandedComments={setExpandedComments}
+                          />
                         </tr>
                       ))
                     )}
@@ -638,18 +792,19 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                       <th className="px-3 py-2.5">Installment 3 Status</th>
                       <th className="px-3 py-2.5">Hotel Voucher Status</th>
                       <th className="px-3 py-2.5">Assigned RM</th>
+                      <th className="px-3 py-2.5 min-w-[180px]">Comments / Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {modalBookings.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
+                        <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
                           No pending hotel vouchers.
                         </td>
                       </tr>
                     ) : (
                       modalBookings.map((b) => (
-                        <tr key={b.pn} className="hover:bg-slate-50/50">
+                        <tr key={b.pn} className="hover:bg-slate-50/50 align-top">
                           <td className="px-3 py-2.5 font-semibold">
                             <button
                               onClick={() => {
@@ -697,6 +852,17 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
+                          <CommentCell
+                            pn={b.pn}
+                            allComments={allComments}
+                            expandedComments={expandedComments}
+                            draftComments={draftComments}
+                            toggleComment={toggleComment}
+                            setDraftComments={setDraftComments}
+                            handleSaveComment={handleSaveComment}
+                            handleClearComment={handleClearComment}
+                            setExpandedComments={setExpandedComments}
+                          />
                         </tr>
                       ))
                     )}
@@ -713,18 +879,19 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                       <th className="px-3 py-2.5">Final Payment Collected</th>
                       <th className="px-3 py-2.5">Final Voucher Status</th>
                       <th className="px-3 py-2.5">Assigned RM</th>
+                      <th className="px-3 py-2.5 min-w-[180px]">Comments / Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {modalBookings.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
+                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
                           No pending final vouchers.
                         </td>
                       </tr>
                     ) : (
                       modalBookings.map((b) => (
-                        <tr key={b.pn} className="hover:bg-slate-50/50">
+                        <tr key={b.pn} className="hover:bg-slate-50/50 align-top">
                           <td className="px-3 py-2.5 font-semibold">
                             <button
                               onClick={() => {
@@ -758,6 +925,17 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
+                          <CommentCell
+                            pn={b.pn}
+                            allComments={allComments}
+                            expandedComments={expandedComments}
+                            draftComments={draftComments}
+                            toggleComment={toggleComment}
+                            setDraftComments={setDraftComments}
+                            handleSaveComment={handleSaveComment}
+                            handleClearComment={handleClearComment}
+                            setExpandedComments={setExpandedComments}
+                          />
                         </tr>
                       ))
                     )}
@@ -776,18 +954,19 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                       <th className="px-3 py-2.5 text-center">Hotel Voucher</th>
                       <th className="px-3 py-2.5 text-center">Final Voucher</th>
                       <th className="px-3 py-2.5">Assigned RM</th>
+                      <th className="px-3 py-2.5 min-w-[180px]">Comments / Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {modalBookings.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
+                        <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
                           No critical pending vouchers.
                         </td>
                       </tr>
                     ) : (
                       modalBookings.map((b) => (
-                        <tr key={b.pn} className="hover:bg-slate-50/50">
+                        <tr key={b.pn} className="hover:bg-slate-50/50 align-top">
                           <td className="px-3 py-2.5 font-semibold">
                             <button
                               onClick={() => {
@@ -853,6 +1032,17 @@ export function VoucherReleaseTab({ bookings, isLoading, onSelectBooking }: { bo
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
+                          <CommentCell
+                            pn={b.pn}
+                            allComments={allComments}
+                            expandedComments={expandedComments}
+                            draftComments={draftComments}
+                            toggleComment={toggleComment}
+                            setDraftComments={setDraftComments}
+                            handleSaveComment={handleSaveComment}
+                            handleClearComment={handleClearComment}
+                            setExpandedComments={setExpandedComments}
+                          />
                         </tr>
                       ))
                     )}
