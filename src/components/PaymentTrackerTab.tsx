@@ -115,15 +115,17 @@ export function PaymentTrackerTab({
     [activeBookings]
   );
   const foc7Count = useMemo(
-    () => activeBookings.filter((b) => daysUntil(b.freeCancellationDate) !== null && daysUntil(b.freeCancellationDate)! <= 7 && b.paymentCollected?.toLowerCase() !== "yes").length,
-    [activeBookings]
-  );
-  const foc5Count = useMemo(
-    () => activeBookings.filter((b) => daysUntil(b.freeCancellationDate) !== null && daysUntil(b.freeCancellationDate)! <= 5 && b.paymentCollected?.toLowerCase() !== "yes").length,
+    () => activeBookings.filter((b) => {
+      const fc = daysUntil(b.freeCancellationDate);
+      return fc !== null && fc >= 4 && fc <= 7 && b.paymentCollected?.toLowerCase() !== "yes";
+    }).length,
     [activeBookings]
   );
   const foc3Count = useMemo(
-    () => activeBookings.filter((b) => daysUntil(b.freeCancellationDate) !== null && daysUntil(b.freeCancellationDate)! <= 3 && b.paymentCollected?.toLowerCase() !== "yes").length,
+    () => activeBookings.filter((b) => {
+      const fc = daysUntil(b.freeCancellationDate);
+      return fc !== null && fc <= 3 && b.paymentCollected?.toLowerCase() !== "yes";
+    }).length,
     [activeBookings]
   );
   const inst2Count = useMemo(
@@ -151,9 +153,7 @@ export function PaymentTrackerTab({
         case "dot-30-pending":
           return td !== null && td <= 30 && notPaid;
         case "foc-7-pending":
-          return fc !== null && fc <= 7 && notPaid;
-        case "foc-5-pending":
-          return fc !== null && fc <= 5 && notPaid;
+          return fc !== null && fc >= 4 && fc <= 7 && notPaid;
         case "foc-3-pending":
           return fc !== null && fc <= 3 && notPaid;
         case "inst2-due-pending":
@@ -193,9 +193,7 @@ export function PaymentTrackerTab({
         case "dot-30-pending":
           return td !== null && td <= 30 && notPaid;
         case "foc-7-pending":
-          return fc !== null && fc <= 7 && notPaid;
-        case "foc-5-pending":
-          return fc !== null && fc <= 5 && notPaid;
+          return fc !== null && fc >= 4 && fc <= 7 && notPaid;
         case "foc-3-pending":
           return fc !== null && fc <= 3 && notPaid;
         case "inst2-due-pending":
@@ -261,7 +259,7 @@ export function PaymentTrackerTab({
       </div>
 
       {/* KPI Cards (Clickable) */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {/* Card 1: Travel ≤ 30 Days */}
         <div
           onClick={() => setActiveModal("dot-30-pending")}
@@ -271,25 +269,16 @@ export function PaymentTrackerTab({
           <div className="mt-2 text-2xl font-bold text-amber-600">{dot30Count}</div>
         </div>
         
-        {/* Card 2: FOC ≤ 7 Days */}
+        {/* Card 2: FOC 4 - 7 Days */}
         <div
           onClick={() => setActiveModal("foc-7-pending")}
           className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm cursor-pointer hover:bg-slate-50/55 hover:shadow-md transition-all duration-150"
         >
-          <div className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500">FOC ≤ 7 Days</div>
+          <div className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500">FOC 4 - 7 Days</div>
           <div className="mt-2 text-2xl font-bold text-red-600">{foc7Count}</div>
         </div>
 
-        {/* Card 3: FOC ≤ 5 Days */}
-        <div
-          onClick={() => setActiveModal("foc-5-pending")}
-          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm cursor-pointer hover:bg-slate-50/55 hover:shadow-md transition-all duration-150"
-        >
-          <div className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500">FOC ≤ 5 Days</div>
-          <div className="mt-2 text-2xl font-bold text-rose-600">{foc5Count}</div>
-        </div>
-
-        {/* Card 4: FOC ≤ 3 Days */}
+        {/* Card 3: FOC ≤ 3 Days */}
         <div
           onClick={() => setActiveModal("foc-3-pending")}
           className="rounded-xl border border-red-100 bg-red-50/50 p-4 shadow-sm cursor-pointer hover:bg-red-100/50 hover:shadow-md transition-all duration-150"
@@ -298,7 +287,7 @@ export function PaymentTrackerTab({
           <div className="mt-2 text-2xl font-bold text-red-700">{foc3Count}</div>
         </div>
 
-        {/* Card 5: Inst 2 Due */}
+        {/* Card 4: Inst 2 Due */}
         <div
           onClick={() => setActiveModal("inst2-due-pending")}
           className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm cursor-pointer hover:bg-slate-50/55 hover:shadow-md transition-all duration-150"
@@ -307,7 +296,7 @@ export function PaymentTrackerTab({
           <div className="mt-2 text-2xl font-bold text-slate-600">{inst2Count}</div>
         </div>
 
-        {/* Card 6: Inst 3 Due */}
+        {/* Card 5: Inst 3 Due */}
         <div
           onClick={() => setActiveModal("inst3-due-pending")}
           className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm cursor-pointer hover:bg-slate-50/55 hover:shadow-md transition-all duration-150"
@@ -323,8 +312,7 @@ export function PaymentTrackerTab({
           <span className="text-xs font-bold text-slate-500 mr-1 uppercase tracking-wider">Quick Filters:</span>
           {[
             { id: "dot-30-pending", label: "Travel ≤30 Days", count: dot30Count },
-            { id: "foc-7-pending", label: "FOC ≤7 Days", count: foc7Count },
-            { id: "foc-5-pending", label: "FOC ≤5 Days", count: foc5Count },
+            { id: "foc-7-pending", label: "FOC 4-7 Days", count: foc7Count },
             { id: "foc-3-pending", label: "FOC ≤3 Days", count: foc3Count },
             { id: "inst2-due-pending", label: "Inst 2 Due", count: inst2Count },
             { id: "inst3-due-pending", label: "Inst 3 Due", count: inst3Count },
@@ -461,17 +449,8 @@ export function PaymentTrackerTab({
               {activeModal === "foc-7-pending" && (
                 <>
                   <AlertCircle className="h-5 w-5 text-red-600" />
-                  <span>Free Cancellation (FOC) ≤ 7 Days</span>
+                  <span>Free Cancellation (FOC) 4 - 7 Days</span>
                   <span className="ml-2 text-xs font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full border border-red-200">
-                    {modalBookings.length} Bookings
-                  </span>
-                </>
-              )}
-              {activeModal === "foc-5-pending" && (
-                <>
-                  <AlertCircle className="h-5 w-5 text-rose-600" />
-                  <span>Free Cancellation (FOC) ≤ 5 Days</span>
-                  <span className="ml-2 text-xs font-semibold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full border border-rose-200">
                     {modalBookings.length} Bookings
                   </span>
                 </>
