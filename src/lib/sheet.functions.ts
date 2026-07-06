@@ -195,8 +195,6 @@ export async function fetchBookings(): Promise<{
         preTrip: row[83]?.toString()?.trim() || "",
         daysToTravel: row[92]?.toString()?.trim() || "",
         matrics: row[18]?.toString()?.trim() || "",
-        installmentComment: row[85]?.toString()?.trim() || "",
-        voucherComment: row[87]?.toString()?.trim() || "",
         rawData: row.map((cell: any) => cell?.toString() || ""),
       };
     });

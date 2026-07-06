@@ -1,5 +1,6 @@
-import { useMemo, useState, useCallback, Dispatch, SetStateAction } from "react";
+import { useMemo, useState, useCallback, useEffect, Dispatch, SetStateAction } from "react";
 import { type Booking, daysUntil } from "@/lib/sheet.functions";
+import { getPNComment, savePNComment } from "@/lib/comments";
 import {
   Dialog,
   DialogContent,
@@ -107,39 +108,49 @@ export function VoucherReleaseTab({
   bookings,
   isLoading,
   onSelectBooking,
-  onUpdateVoucherComment,
 }: {
   bookings: Booking[];
   isLoading: boolean;
   onSelectBooking?: (booking: Booking, mode: "voucher") => void;
-  onUpdateVoucherComment?: (pn: string, text: string) => void;
 }) {
   const [quickFilter, setQuickFilter] = useState<"dot-15" | "dot-7" | "dot-3" | null>(null);
   const [search, setSearch] = useState<string>("");
   const [activeModal, setActiveModal] = useState<"flight-not-shared" | "hotel-not-shared" | "final-not-shared" | "critical-pending" | null>(null);
 
-  // ── Comment state ──
+  // ── Comment state (Shared KV database) ──
+  const [allComments, setAllComments] = useState<Record<string, string>>({});
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [draftComments, setDraftComments] = useState<Record<string, string>>({});
 
   const toggleComment = useCallback((pn: string) => {
     setExpandedComments((prev) => ({ ...prev, [pn]: !prev[pn] }));
-    const bk = bookings.find((b) => b.pn === pn);
     setDraftComments((prev) => ({
       ...prev,
-      [pn]: prev[pn] ?? (bk?.voucherComment || ""),
+      [pn]: prev[pn] ?? (allComments[pn] || ""),
     }));
-  }, [bookings]);
+  }, [allComments]);
 
-  const handleSaveComment = useCallback((pn: string) => {
+  const handleSaveComment = useCallback(async (pn: string) => {
     const text = draftComments[pn] ?? "";
-    onUpdateVoucherComment?.(pn, text.trim());
-  }, [draftComments, onUpdateVoucherComment]);
+    const success = await savePNComment(pn, "vouch", text);
+    if (success) {
+      setAllComments((prev) => ({ ...prev, [pn]: text.trim() }));
+      setExpandedComments((prev) => ({ ...prev, [pn]: false }));
+    }
+  }, [draftComments]);
 
-  const handleClearComment = useCallback((pn: string) => {
-    onUpdateVoucherComment?.(pn, "");
-    setDraftComments((prev) => ({ ...prev, [pn]: "" }));
-  }, [onUpdateVoucherComment]);
+  const handleClearComment = useCallback(async (pn: string) => {
+    const success = await savePNComment(pn, "vouch", "");
+    if (success) {
+      setAllComments((prev) => {
+        const copy = { ...prev };
+        delete copy[pn];
+        return copy;
+      });
+      setDraftComments((prev) => ({ ...prev, [pn]: "" }));
+    }
+  }, []);
 
   // Derived milestones for future trips (Travel Date >= Today)
   const enrichedBookings = useMemo(() => {
@@ -288,7 +299,27 @@ export function VoucherReleaseTab({
     }
     return [];
   }, [enrichedBookings, activeModal]);
+  // Fetch comments from shared database when modal opens
+  useEffect(() => {
+    if (!activeModal || modalBookings.length === 0) return;
 
+    setIsLoadingComments(true);
+    const pns = modalBookings.map((b) => b.pn);
+
+    Promise.all(
+      pns.map(async (pn) => {
+        const val = await getPNComment(pn, "vouch");
+        return { pn, val };
+      })
+    ).then((results) => {
+      const map: Record<string, string> = {};
+      results.forEach((r) => {
+        if (r.val) map[r.pn] = r.val;
+      });
+      setAllComments((prev) => ({ ...prev, ...map }));
+      setIsLoadingComments(false);
+    });
+  }, [activeModal, modalBookings]);
   // Table dataset filters
   const filteredBookings = useMemo(() => {
     let result = enrichedBookings;
@@ -739,7 +770,7 @@ export function VoucherReleaseTab({
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
                           <CommentCell
                             pn={b.pn}
-                            existingText={b.voucherComment || ""}
+                            existingText={allComments[b.pn] || ""}
                             expandedComments={expandedComments}
                             draftComments={draftComments}
                             toggleComment={toggleComment}
@@ -827,7 +858,7 @@ export function VoucherReleaseTab({
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
                           <CommentCell
                             pn={b.pn}
-                            existingText={b.voucherComment || ""}
+                            existingText={allComments[b.pn] || ""}
                             expandedComments={expandedComments}
                             draftComments={draftComments}
                             toggleComment={toggleComment}
@@ -900,7 +931,7 @@ export function VoucherReleaseTab({
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
                           <CommentCell
                             pn={b.pn}
-                            existingText={b.voucherComment || ""}
+                            existingText={allComments[b.pn] || ""}
                             expandedComments={expandedComments}
                             draftComments={draftComments}
                             toggleComment={toggleComment}
@@ -1007,7 +1038,7 @@ export function VoucherReleaseTab({
                           <td className="px-3 py-2.5 text-slate-600 font-medium">{b.opsRm || "Unassigned"}</td>
                           <CommentCell
                             pn={b.pn}
-                            existingText={b.voucherComment || ""}
+                            existingText={allComments[b.pn] || ""}
                             expandedComments={expandedComments}
                             draftComments={draftComments}
                             toggleComment={toggleComment}

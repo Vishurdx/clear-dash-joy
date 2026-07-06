@@ -1,5 +1,6 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { type Booking, daysUntil, inr } from "@/lib/sheet.functions";
+import { getPNComment, savePNComment } from "@/lib/comments";
 import {
   Dialog,
   DialogContent,
@@ -18,38 +19,48 @@ export function PaymentTrackerTab({
   bookings,
   isLoading,
   onSelectBooking,
-  onUpdateInstallmentComment,
 }: {
   bookings: Booking[];
   isLoading: boolean;
   onSelectBooking?: (booking: Booking, mode: "payment") => void;
-  onUpdateInstallmentComment?: (pn: string, text: string) => void;
 }) {
   const [quickFilter, setQuickFilter] = useState<string>("");
   const [activeModal, setActiveModal] = useState<"dot-30-pending" | "foc-7-pending" | "foc-5-pending" | "foc-3-pending" | "inst2-due-pending" | "inst3-due-pending" | null>(null);
 
-  // ── Comment state ──
+  // ── Comment state (Shared KV database) ──
+  const [allComments, setAllComments] = useState<Record<string, string>>({});
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [draftComments, setDraftComments] = useState<Record<string, string>>({});
 
   const toggleComment = useCallback((pn: string) => {
     setExpandedComments((prev) => ({ ...prev, [pn]: !prev[pn] }));
-    const bk = bookings.find((b) => b.pn === pn);
     setDraftComments((prev) => ({
       ...prev,
-      [pn]: prev[pn] ?? (bk?.installmentComment || ""),
+      [pn]: prev[pn] ?? (allComments[pn] || ""),
     }));
-  }, [bookings]);
+  }, [allComments]);
 
-  const handleSaveComment = useCallback((pn: string) => {
+  const handleSaveComment = useCallback(async (pn: string) => {
     const text = draftComments[pn] ?? "";
-    onUpdateInstallmentComment?.(pn, text.trim());
-  }, [draftComments, onUpdateInstallmentComment]);
+    const success = await savePNComment(pn, "inst", text);
+    if (success) {
+      setAllComments((prev) => ({ ...prev, [pn]: text.trim() }));
+      setExpandedComments((prev) => ({ ...prev, [pn]: false }));
+    }
+  }, [draftComments]);
 
-  const handleClearComment = useCallback((pn: string) => {
-    onUpdateInstallmentComment?.(pn, "");
-    setDraftComments((prev) => ({ ...prev, [pn]: "" }));
-  }, [onUpdateInstallmentComment]);
+  const handleClearComment = useCallback(async (pn: string) => {
+    const success = await savePNComment(pn, "inst", "");
+    if (success) {
+      setAllComments((prev) => {
+        const copy = { ...prev };
+        delete copy[pn];
+        return copy;
+      });
+      setDraftComments((prev) => ({ ...prev, [pn]: "" }));
+    }
+  }, []);
 
   // Filter bookings for the payment tracker dashboard:
   // - Exclude dropped bookings
@@ -197,7 +208,27 @@ export function PaymentTrackerTab({
     });
     return rawModal;
   }, [activeBookings, activeModal]);
+  // Fetch comments from shared database when modal opens
+  useEffect(() => {
+    if (!activeModal || modalBookings.length === 0) return;
 
+    setIsLoadingComments(true);
+    const pns = modalBookings.map((b) => b.pn);
+
+    Promise.all(
+      pns.map(async (pn) => {
+        const val = await getPNComment(pn, "inst");
+        return { pn, val };
+      })
+    ).then((results) => {
+      const map: Record<string, string> = {};
+      results.forEach((r) => {
+        if (r.val) map[r.pn] = r.val;
+      });
+      setAllComments((prev) => ({ ...prev, ...map }));
+      setIsLoadingComments(false);
+    });
+  }, [activeModal, modalBookings]);
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white">
@@ -501,7 +532,7 @@ export function PaymentTrackerTab({
                   </tr>
                 ) : (
                   modalBookings.map((b) => {
-                    const existingText = b.installmentComment || "";
+                    const existingText = allComments[b.pn] || "";
                     const isOpen = expandedComments[b.pn] ?? false;
                     const draft = draftComments[b.pn] ?? existingText;
                     const hasSaved = !!existingText;

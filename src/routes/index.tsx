@@ -227,89 +227,7 @@ function Dashboard() {
     refetch();
   };
 
-  const handleUpdateInstallmentComment = async (pn: string, newComment: string) => {
-    const booking = rows.find(r => r.pn === pn);
-    if (!booking) return;
 
-    const updatedRaw = [...(booking.rawData || [])];
-    while (updatedRaw.length < 94) {
-      updatedRaw.push("");
-    }
-    updatedRaw[85] = newComment; // Index 85 is "Remarks by vishwajeet"
-
-    const updatedBooking: Booking = {
-      ...booking,
-      installmentComment: newComment,
-      rawData: updatedRaw,
-      updatedAt: Date.now()
-    };
-
-    const updatedLocally = {
-      ...localUpdatedBookings,
-      [pn]: updatedBooking,
-    };
-    setLocalUpdatedBookings(updatedLocally);
-    localStorage.setItem("local_updated_bookings", JSON.stringify(updatedLocally));
-    toast.info("Saving installment comment...");
-
-    try {
-      const result = await updateBookingFn({ pn, values: updatedRaw });
-      if (result && result.status === "success") {
-        toast.success(`Installment comment for ${pn} successfully updated in Google Sheet!`);
-      } else if (result && (result.status === "local_only" || !result.status)) {
-        toast.warning(`Saved locally. Configure VITE_GOOGLE_SCRIPT_URL to sync to Google Sheet.`);
-      } else if (result && result.status === "error") {
-        toast.error(`Failed to sync update to Google Sheet: ${result.message}`);
-      }
-    } catch (err: any) {
-      console.error("Failed to sync installment comment update to Google Sheet:", err);
-      toast.error(`Comment saved locally, but Google Sheet sync failed: ${err.message}`);
-    }
-
-    refetch();
-  };
-
-  const handleUpdateVoucherComment = async (pn: string, newComment: string) => {
-    const booking = rows.find(r => r.pn === pn);
-    if (!booking) return;
-
-    const updatedRaw = [...(booking.rawData || [])];
-    while (updatedRaw.length < 94) {
-      updatedRaw.push("");
-    }
-    updatedRaw[87] = newComment; // Index 87 is "Comments"
-
-    const updatedBooking: Booking = {
-      ...booking,
-      voucherComment: newComment,
-      rawData: updatedRaw,
-      updatedAt: Date.now()
-    };
-
-    const updatedLocally = {
-      ...localUpdatedBookings,
-      [pn]: updatedBooking,
-    };
-    setLocalUpdatedBookings(updatedLocally);
-    localStorage.setItem("local_updated_bookings", JSON.stringify(updatedLocally));
-    toast.info("Saving voucher comment...");
-
-    try {
-      const result = await updateBookingFn({ pn, values: updatedRaw });
-      if (result && result.status === "success") {
-        toast.success(`Voucher comment for ${pn} successfully updated in Google Sheet!`);
-      } else if (result && (result.status === "local_only" || !result.status)) {
-        toast.warning(`Saved locally. Configure VITE_GOOGLE_SCRIPT_URL to sync to Google Sheet.`);
-      } else if (result && result.status === "error") {
-        toast.error(`Failed to sync update to Google Sheet: ${result.message}`);
-      }
-    } catch (err: any) {
-      console.error("Failed to sync voucher comment update to Google Sheet:", err);
-      toast.error(`Comment saved locally, but Google Sheet sync failed: ${err.message}`);
-    }
-
-    refetch();
-  };
 
   const handleUpdateCallStatus = async (booking: Booking, taskNumber: number, completed: boolean) => {
     const updatedRaw = [...(booking.rawData || [])];
@@ -614,7 +532,6 @@ function Dashboard() {
                 setEditFormMode("payment");
                 setSelectedBooking(b);
               }} 
-              onUpdateInstallmentComment={handleUpdateInstallmentComment}
             />
           </section>
         )}
@@ -629,7 +546,6 @@ function Dashboard() {
                 setEditFormMode("voucher");
                 setSelectedBooking(b);
               }} 
-              onUpdateVoucherComment={handleUpdateVoucherComment}
             />
           </section>
         )}
