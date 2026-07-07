@@ -69,6 +69,29 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+import { createContext, useContext, useState } from "react";
+import { Login } from "../components/Login";
+
+interface UserSession {
+  name: string;
+  email: string;
+  picture: string;
+  token: string;
+}
+
+interface AuthContextType {
+  user: UserSession | null;
+  logout: () => void;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
+}
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
@@ -77,12 +100,34 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const [user, setUser] = useState<UserSession | null>(() => {
+    const raw = localStorage.getItem("travclan_user_session");
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        localStorage.removeItem("travclan_user_session");
+      }
+    }
+    return null;
+  });
+
+  const logout = () => {
+    localStorage.removeItem("travclan_user_session");
+    setUser(null);
+  };
+
+  if (!user) {
+    return <Login onLoginSuccess={setUser} />;
+  }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <Toaster />
-    </QueryClientProvider>
+    <AuthContext.Provider value={{ user, logout }}>
+      <QueryClientProvider client={queryClient}>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        <Toaster />
+      </QueryClientProvider>
+    </AuthContext.Provider>
   );
 }

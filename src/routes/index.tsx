@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useAuth } from "./__root";
 import { fetchBookings, addBookingToSheet, updateBookingInSheet, type Booking, daysUntil, daysSince, CollectionPriority } from "@/lib/sheet.functions";
 import { toast } from "sonner";
 import { PaymentTrackerTab } from "@/components/PaymentTrackerTab";
@@ -67,6 +68,7 @@ function getPriorityColor(priority: CollectionPriority | undefined): string {
 import { DynamicBookingForm } from "@/components/DynamicBookingForm";
 
 function Dashboard() {
+  const { user, logout } = useAuth();
   const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ["bookings"],
     queryFn: () => fetchBookings(),
@@ -397,7 +399,7 @@ function Dashboard() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setShowNewBookingForm(true)}
               className="rounded-lg bg-orange-500 text-white px-4 py-2 text-xs font-bold shadow-md shadow-orange-500/25 hover:bg-orange-600 hover:shadow-lg active:scale-95 transition-all duration-200 cursor-pointer flex items-center gap-1.5 border border-orange-400/20"
@@ -420,6 +422,36 @@ function Dashboard() {
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} /> Sync & Refresh
             </button>
+
+            {/* Google Authenticated User Profile */}
+            {user && (
+              <div className="flex items-center gap-3 border-l border-slate-850 pl-3">
+                <div className="flex items-center gap-2">
+                  {user.picture ? (
+                    <img
+                      src={user.picture}
+                      alt={user.name}
+                      referrerPolicy="no-referrer"
+                      className="h-8 w-8 rounded-full border border-slate-700 shadow-sm"
+                    />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/20 text-xs font-bold text-orange-400 border border-orange-500/30">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="hidden sm:flex flex-col text-left">
+                    <span className="text-[11px] font-bold leading-tight text-white">{user.name}</span>
+                    <span className="text-[9px] text-slate-400 leading-none">{user.email}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="rounded-lg border border-slate-700 bg-slate-850/80 hover:bg-red-950/20 hover:border-red-900/30 hover:text-red-400 active:scale-95 text-slate-300 transition-all duration-200 text-[10px] font-bold px-2.5 py-1.5 cursor-pointer"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
