@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useAuth } from "./__root";
+import { pushEditLog, getEditLogs, type EditLog } from "@/lib/comments";
 import { fetchBookings, addBookingToSheet, updateBookingInSheet, type Booking, daysUntil, daysSince, CollectionPriority } from "@/lib/sheet.functions";
 import { toast } from "sonner";
 import { PaymentTrackerTab } from "@/components/PaymentTrackerTab";
@@ -10,7 +11,7 @@ import { VoucherReleaseTab } from "@/components/VoucherReleaseTab";
 import { DailyReportTab } from "@/components/DailyReportTab";
 import { MonthlyBookingsTab } from "@/components/MonthlyBookingsTab";
 import { CallReportTab } from "@/components/CallReportTab";
-import { Compass, Plus, RefreshCw } from "lucide-react";
+import { Compass, Plus, RefreshCw, History } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -86,6 +87,22 @@ function Dashboard() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [editFormMode, setEditFormMode] = useState<"all" | "payment" | "voucher">("all");
   const [showNewBookingForm, setShowNewBookingForm] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyLogs, setHistoryLogs] = useState<EditLog[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const handleOpenHistory = async () => {
+    setShowHistoryModal(true);
+    setLoadingHistory(true);
+    try {
+      const logs = await getEditLogs();
+      setHistoryLogs(logs);
+    } catch (e) {
+      toast.error("Failed to load edit history");
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const addBookingFn = addBookingToSheet;
   const updateBookingFn = updateBookingInSheet;
@@ -116,6 +133,33 @@ function Dashboard() {
     } catch (err: any) {
       console.error("Failed to sync booking update to Google Sheet:", err);
       toast.error(`Saved locally. Google Sheet sync failed: ${err.message}`);
+    }
+
+    // Compare with oldBooking and push log
+    const oldBooking = rows.find(r => r.pn === updatedBooking.pn);
+    if (oldBooking) {
+      const changes: string[] = [];
+      const fieldLabels: Record<string, string> = {
+        tripStatus: "Trip Status",
+        paymentCollected: "Payment Collected",
+        opsRm: "Ops RM",
+        destination: "Destination",
+        leadPax: "Lead Pax Name",
+        travelDate: "Travel Date",
+        flightVoucher: "Flight Voucher",
+        hotelVoucher: "Hotel Voucher",
+        finalVoucher: "Final Voucher"
+      };
+      Object.entries(fieldLabels).forEach(([key, label]) => {
+        const oldVal = String(oldBooking[key as keyof Booking] || "—");
+        const newVal = String(updatedBooking[key as keyof Booking] || "—");
+        if (oldVal !== newVal) {
+          changes.push(`changed ${label} from "${oldVal}" to "${newVal}"`);
+        }
+      });
+      if (changes.length > 0) {
+        pushEditLog(updatedBooking.pn, changes.join(", "), user?.name || "Unknown Operator", user?.email || "");
+      }
     }
 
     const updated = {
@@ -156,6 +200,8 @@ function Dashboard() {
       toast.error(`Saved locally. Google Sheet sync failed: ${err.message}`);
     }
 
+    pushEditLog(newBooking.pn, `Created new booking for lead pax "${newBooking.leadPax || "—"}"`, user?.name || "Unknown Operator", user?.email || "");
+
     const updated = [...localAddedBookings, newBooking];
     setLocalAddedBookings(updated);
     localStorage.setItem("local_added_bookings", JSON.stringify(updated));
@@ -186,6 +232,8 @@ function Dashboard() {
     setLocalHiddenBookings(updatedHidden);
     localStorage.setItem("local_hidden_bookings", JSON.stringify(updatedHidden));
 
+    pushEditLog(pn, "Removed booking from active view", user?.name || "Unknown Operator", user?.email || "");
+
     toast.success(`Booking ${pn} has been removed from the website.`);
     setSelectedBooking(null);
   };
@@ -211,6 +259,8 @@ function Dashboard() {
     setLocalUpdatedBookings(updatedLocally);
     localStorage.setItem("local_updated_bookings", JSON.stringify(updatedLocally));
     toast.info("Saving comment update...");
+
+    pushEditLog(pn, newComment.trim() ? `Updated comment: "${newComment.trim()}"` : "Cleared comment", user?.name || "Unknown Operator", user?.email || "");
 
     try {
       const result = await updateBookingFn({ pn, values: updatedRaw });
@@ -261,6 +311,10 @@ function Dashboard() {
     };
     setLocalUpdatedBookings(updatedLocally);
     localStorage.setItem("local_updated_bookings", JSON.stringify(updatedLocally));
+
+    const taskNames = ["1st Call", "Post Booking Call", "Pre Trip Call"];
+    const taskName = taskNames[taskNumber - 1] || `Call ${taskNumber}`;
+    pushEditLog(booking.pn, `${completed ? "Marked" : "Unmarked"} ${taskName} as completed`, user?.name || "Unknown Operator", user?.email || "");
 
     toast.info(`Syncing call status update to Google Sheet...`);
 
@@ -421,6 +475,12 @@ function Dashboard() {
               className="rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white active:scale-95 transition-all duration-200 text-xs font-bold px-4 py-2 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} /> Sync & Refresh
+            </button>
+            <button
+              onClick={handleOpenHistory}
+              className="rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white active:scale-95 transition-all duration-200 text-xs font-bold px-4 py-2 flex items-center gap-1.5 cursor-pointer"
+            >
+              <History className="h-3.5 w-3.5" /> Edit History
             </button>
 
             {/* Google Authenticated User Profile */}
@@ -760,6 +820,86 @@ function Dashboard() {
               onRemove={handleRemoveBooking}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit History Dialog */}
+      <Dialog open={showHistoryModal} onOpenChange={setShowHistoryModal}>
+        <DialogContent className="max-w-2xl bg-slate-900 border border-slate-800 text-slate-100 p-6 rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col font-sans">
+          <DialogHeader className="border-b border-slate-850 pb-4">
+            <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+              <History className="h-5 w-5 text-orange-500" />
+              Global Edit History
+            </DialogTitle>
+            <p className="text-xs text-slate-400 mt-1">
+              Displaying the last 25 operations changes made by the team across the dashboard.
+            </p>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto pr-1 py-4 space-y-4">
+            {loadingHistory ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <RefreshCw className="h-8 w-8 animate-spin text-orange-500 mb-2" />
+                <p className="text-sm font-medium">Fetching change logs from cloud...</p>
+              </div>
+            ) : historyLogs.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <p className="text-sm font-medium">No edit history recorded yet.</p>
+                <p className="text-xs text-slate-500 mt-1">Changes made to bookings and comments will appear here.</p>
+              </div>
+            ) : (
+              <div className="relative border-l border-slate-805 ml-4 pl-6 space-y-6">
+                {historyLogs.map((log) => (
+                  <div key={log.id} className="relative group">
+                    {/* Circle Indicator on the line */}
+                    <div className="absolute -left-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-950 border border-orange-500/50 shadow-[0_0_8px_rgba(249,115,22,0.2)]">
+                      <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        {/* User info */}
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-gradient-to-br from-orange-500/20 to-cyan-500/20 border border-slate-700/50 text-[10px] font-bold text-orange-400">
+                            {log.userName.charAt(0).toUpperCase()}
+                          </span>
+                          <span className="text-xs font-bold text-slate-200">{log.userName}</span>
+                          <span className="text-[10px] text-slate-500 font-medium">({log.userEmail})</span>
+                        </div>
+                        
+                        {/* Action */}
+                        <p className="text-xs text-slate-350 leading-relaxed pl-8">
+                          {log.action}
+                        </p>
+                      </div>
+                      
+                      {/* PN Badge & Timestamp */}
+                      <div className="flex sm:flex-col items-end gap-2 shrink-0 text-right pl-8 sm:pl-0">
+                        <button
+                          onClick={() => {
+                            setSearch(log.pn);
+                            setShowHistoryModal(false);
+                            toast.info(`Filtered dashboard for PN: ${log.pn}`);
+                          }}
+                          className="inline-flex items-center gap-1 rounded bg-slate-850 hover:bg-slate-800 text-cyan-400 border border-slate-750 text-[10px] font-bold px-2 py-0.5 transition cursor-pointer"
+                        >
+                          {log.pn}
+                        </button>
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          {new Date(log.timestamp).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

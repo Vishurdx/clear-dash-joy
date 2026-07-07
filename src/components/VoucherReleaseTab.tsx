@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useEffect, Dispatch, SetStateAction } from "react";
 import { type Booking, daysUntil } from "@/lib/sheet.functions";
-import { getPNComment, savePNComment } from "@/lib/comments";
+import { getPNComment, savePNComment, pushEditLog } from "@/lib/comments";
 import {
   Dialog,
   DialogContent,
@@ -137,6 +137,9 @@ export function VoucherReleaseTab({
     if (success) {
       setAllComments((prev) => ({ ...prev, [pn]: text.trim() }));
       setExpandedComments((prev) => ({ ...prev, [pn]: false }));
+      const userRaw = localStorage.getItem("travclan_user_session");
+      const user = userRaw ? JSON.parse(userRaw) : null;
+      pushEditLog(pn, text.trim() ? `Updated voucher comment: "${text.trim()}"` : "Cleared voucher comment", user?.name || "Unknown Operator", user?.email || "");
     }
   }, [draftComments]);
 
@@ -149,6 +152,9 @@ export function VoucherReleaseTab({
         return copy;
       });
       setDraftComments((prev) => ({ ...prev, [pn]: "" }));
+      const userRaw = localStorage.getItem("travclan_user_session");
+      const user = userRaw ? JSON.parse(userRaw) : null;
+      pushEditLog(pn, "Cleared voucher comment", user?.name || "Unknown Operator", user?.email || "");
     }
   }, []);
 

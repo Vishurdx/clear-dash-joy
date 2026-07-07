@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { type Booking, daysUntil, inr } from "@/lib/sheet.functions";
-import { getPNComment, savePNComment } from "@/lib/comments";
+import { getPNComment, savePNComment, pushEditLog } from "@/lib/comments";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,7 @@ export function PaymentTrackerTab({
   onSelectBooking?: (booking: Booking, mode: "payment") => void;
 }) {
   const [quickFilter, setQuickFilter] = useState<string>("");
-  const [activeModal, setActiveModal] = useState<"dot-30-pending" | "foc-7-pending" | "foc-5-pending" | "foc-3-pending" | "inst2-due-pending" | "inst3-due-pending" | null>(null);
+  const [activeModal, setActiveModal] = useState<"dot-30-pending" | "foc-7-pending" | "foc-3-pending" | "inst2-due-pending" | "inst3-due-pending" | null>(null);
 
   // ── Comment state (Shared KV database) ──
   const [allComments, setAllComments] = useState<Record<string, string>>({});
@@ -47,6 +47,9 @@ export function PaymentTrackerTab({
     if (success) {
       setAllComments((prev) => ({ ...prev, [pn]: text.trim() }));
       setExpandedComments((prev) => ({ ...prev, [pn]: false }));
+      const userRaw = localStorage.getItem("travclan_user_session");
+      const user = userRaw ? JSON.parse(userRaw) : null;
+      pushEditLog(pn, text.trim() ? `Updated installment comment: "${text.trim()}"` : "Cleared installment comment", user?.name || "Unknown Operator", user?.email || "");
     }
   }, [draftComments]);
 
@@ -59,6 +62,9 @@ export function PaymentTrackerTab({
         return copy;
       });
       setDraftComments((prev) => ({ ...prev, [pn]: "" }));
+      const userRaw = localStorage.getItem("travclan_user_session");
+      const user = userRaw ? JSON.parse(userRaw) : null;
+      pushEditLog(pn, "Cleared installment comment", user?.name || "Unknown Operator", user?.email || "");
     }
   }, []);
 
