@@ -86,129 +86,129 @@ const VISIBLE_COLUMNS: VisibleColumnDef[] = [
   { key: "Query code", label: "Query code", sheetIndex: 3, type: "text" },
   { key: "Date of Travel", label: "Date of Travel", sheetIndex: 4, type: "date" },
   { key: "Free Cancellation Date", label: "Free Cancellation Date", sheetIndex: 5, type: "date" },
-  { key: "Adult", label: "Adult", sheetIndex: 6, type: "number" },
-  { key: "Child", label: "Child", sheetIndex: 7, type: "number" },
-  { key: "Infant", label: "Infant", sheetIndex: 8, type: "number" },
-  { key: "Booking created date", label: "Booking created date", sheetIndex: 9, type: "date" },
-  { key: "Confirmed on (only date)", label: "Confirmed on (only date)", sheetIndex: 10, type: "date" },
-  { key: "Lead pax name", label: "Lead pax name", sheetIndex: 11, type: "text" },
+  { key: "Adult", label: "Adult", sheetIndex: 7, type: "number" },
+  { key: "Child", label: "Child", sheetIndex: 8, type: "number" },
+  { key: "Infant", label: "Infant", sheetIndex: 9, type: "number" },
+  { key: "Booking created date", label: "Booking created date", sheetIndex: 10, type: "date" },
+  { key: "Confirmed on (only date)", label: "Confirmed on (only date)", sheetIndex: 11, type: "date" },
+  { key: "Lead pax name", label: "Lead pax name", sheetIndex: 12, type: "text" },
   { 
     key: "Ops RM", 
     label: "Ops RM", 
-    sheetIndex: 12, 
+    sheetIndex: 13, 
     type: "select", 
     options: ["Vishwajeet", "Shruti"] 
   },
   { 
     key: "Destination", 
     label: "Destination", 
-    sheetIndex: 15, 
+    sheetIndex: 16, 
     type: "select", 
     options: ["Bali", "Thailand", "Singapore+Malaysia", "Maldives", "Sri lanka", "Varanasi", "Itlay", "Vietnam", "Europe", "Mauritius", "Hong Kong", "Kerela", "Singapore", "Goa", "Dubai"] 
   },
   { 
     key: "Final voucher", 
     label: "Final voucher", 
-    sheetIndex: 17, 
+    sheetIndex: 18, 
     type: "select", 
     options: ["Shared", "Not Shared", "Not Applicable"] 
   },
-  { key: "Matrics", label: "Matrics", sheetIndex: 18, type: "text", isCalculated: true },
+  { key: "Matrics", label: "Matrics", sheetIndex: 19, type: "text", isCalculated: true },
   { 
     key: "Seller name \ndropdown ", 
     label: "Seller name dropdown", 
-    sheetIndex: 19, 
+    sheetIndex: 20, 
     type: "select", 
     options: ["Khushi", "Shriya", "Dheeraj", "Priyanshu", "Deeraj", "Aasti", "Rishi", "Nitin", "Shreya sharma", "Vagisha", "Fakiha", "Saurabh P", "Pranjal", "Gurtej", "Vinay", "Amit", "Saurabh K", "Pranav", "Tejal", "Bhavya", "Syed", "Govind", "Shubham", "Rahul", "Kaif", 'Tanish'] 
   },
   { 
     key: "Hotel voucher", 
     label: "Hotel voucher", 
-    sheetIndex: 27, 
+    sheetIndex: 28, 
     type: "select", 
     options: ["Shared", "Not Shared", "Not Applicable"] 
   },
   { 
     key: "Visa voucher", 
     label: "Visa voucher", 
-    sheetIndex: 29, 
+    sheetIndex: 30, 
     type: "select", 
     options: ["Shared", "Not Shared", "Not Applicable"] 
   },
   { 
     key: "Flight voucher", 
     label: "Flight voucher", 
-    sheetIndex: 30, 
+    sheetIndex: 31, 
     type: "select", 
     options: ["Shared", "Not Shared", "Not Applicable"] 
   },
-  { key: "Voucher Pending", label: "Voucher Pending", sheetIndex: 31, type: "text", isCalculated: true },
+  { key: "Voucher Pending", label: "Voucher Pending", sheetIndex: 32, type: "text", isCalculated: true },
 
   // Section 2: Costing & Budget
-  { key: "Flights SP", label: "Flights SP", sheetIndex: 37, type: "number" },
-  { key: "Hotel SP", label: "Hotel SP", sheetIndex: 38, type: "number" },
-  { key: "Land SP", label: "Land SP", sheetIndex: 39, type: "number" },
-  { key: "VISA SP", label: "VISA SP", sheetIndex: 40, type: "number" },
-  { key: "Final ttv", label: "Final ttv", sheetIndex: 41, type: "number", isCalculated: true },
-  { key: "Remarks for SP", label: "Remarks for SP", sheetIndex: 42, type: "text" },
-  { key: "Net Cost (DMC)", label: "Net Cost (DMC)", sheetIndex: 52, type: "number" },
-  { key: "Airfare + Visa Dmc Nett Cost", label: "Airfare + Visa Dmc Nett Cost", sheetIndex: 53, type: "number" },
-  { key: "Total CP", label: "Total CP", sheetIndex: 56, type: "number", isCalculated: true },
-  { key: "Remarks for CP", label: "Remarks for CP", sheetIndex: 57, type: "text" },
+  { key: "Flights SP", label: "Flights SP", sheetIndex: 38, type: "number" },
+  { key: "Hotel SP", label: "Hotel SP", sheetIndex: 39, type: "number" },
+  { key: "Land SP", label: "Land SP", sheetIndex: 40, type: "number" },
+  { key: "VISA SP", label: "VISA SP", sheetIndex: 41, type: "number" },
+  { key: "Final ttv", label: "Final ttv", sheetIndex: 42, type: "number", isCalculated: true },
+  { key: "Remarks for SP", label: "Remarks for SP", sheetIndex: 43, type: "text" },
+  { key: "Net Cost (DMC)", label: "Net Cost (DMC)", sheetIndex: 53, type: "number" },
+  { key: "Airfare + Visa Dmc Nett Cost", label: "Airfare + Visa Dmc Nett Cost", sheetIndex: 54, type: "number" },
+  { key: "Total CP", label: "Total CP", sheetIndex: 57, type: "number", isCalculated: true },
+  { key: "Remarks for CP", label: "Remarks for CP", sheetIndex: 58, type: "text" },
 
   // Section 3: Installments & Payments
-  { key: "Due date (Installment 1)", label: "Due date (Installment 1)", sheetIndex: 59, type: "date" },
-  { key: "Instalment 1", label: "Instalment 1", sheetIndex: 60, type: "number" },
+  { key: "Due date (Installment 1)", label: "Due date (Installment 1)", sheetIndex: 60, type: "date" },
+  { key: "Instalment 1", label: "Instalment 1", sheetIndex: 61, type: "number" },
   { 
     key: "Installment 1 status", 
     label: "Installment 1 status", 
-    sheetIndex: 62, 
+    sheetIndex: 63, 
     type: "select", 
     options: ["Received", "Not Received", "Not Applicable"] 
   },
-  { key: "Due date (Installment 2)", label: "Due date (Installment 2)", sheetIndex: 63, type: "date" },
-  { key: "Amount for Installment 2", label: "Amount for Installment 2", sheetIndex: 64, type: "number" },
+  { key: "Due date (Installment 2)", label: "Due date (Installment 2)", sheetIndex: 64, type: "date" },
+  { key: "Amount for Installment 2", label: "Amount for Installment 2", sheetIndex: 65, type: "number" },
   { 
     key: "Installment 2 status", 
     label: "Installment 2 status", 
-    sheetIndex: 65, 
+    sheetIndex: 66, 
     type: "select", 
     options: ["Received", "Not Received", "Not Applicable", "Out of service number"] 
   },
-  { key: "Due date (Installment 3)", label: "Due date (Installment 3)", sheetIndex: 66, type: "date" },
-  { key: "Amount for Installment 3", label: "Amount for Installment 3", sheetIndex: 67, type: "number" },
+  { key: "Due date (Installment 3)", label: "Due date (Installment 3)", sheetIndex: 67, type: "date" },
+  { key: "Amount for Installment 3", label: "Amount for Installment 3", sheetIndex: 68, type: "number" },
   { 
     key: "Installment 3 status", 
     label: "Installment 3 status", 
-    sheetIndex: 68, 
+    sheetIndex: 69, 
     type: "select", 
     options: ["Received", "Not Received", "Not Applicable", "-"] 
   },
-  { key: "Pending Final Amount", label: "Pending Final Amount", sheetIndex: 70, type: "number", isCalculated: true },
-  { key: "Total installment amount", label: "Total installment amount", sheetIndex: 71, type: "number", isCalculated: true },
-  { key: "Discrepanncy in cost", label: "Discrepanncy in cost", sheetIndex: 72, type: "text", isCalculated: true },
+  { key: "Pending Final Amount", label: "Pending Final Amount", sheetIndex: 71, type: "number", isCalculated: true },
+  { key: "Total installment amount", label: "Total installment amount", sheetIndex: 72, type: "number", isCalculated: true },
+  { key: "Discrepanncy in cost", label: "Discrepanncy in cost", sheetIndex: 73, type: "text", isCalculated: true },
   { 
     key: "Final Payment Collected", 
     label: "Final Payment Collected", 
-    sheetIndex: 73, 
+    sheetIndex: 74, 
     type: "select", 
     options: ["Yes", "No"], 
     isCalculated: true 
   },
-  { key: "Payment reminder", label: "Payment reminder", sheetIndex: 74, type: "text", isCalculated: true },
+  { key: "Payment reminder", label: "Payment reminder", sheetIndex: 75, type: "text", isCalculated: true },
 
   // Section 4: Trip Operations
-  { key: "Arrival Pictures shared on whatsapp group", label: "Arrival Pictures shared on whatsapp group", sheetIndex: 76, type: "text" },
-  { key: "Rating given by the customer", label: "Rating given by the customer", sheetIndex: 77, type: "text" },
-  { key: "Feedback given by the client", label: "Feedback given by the client", sheetIndex: 78, type: "text" },
-  { key: "Referrals if any", label: "Referrals if any", sheetIndex: 79, type: "text" },
-  { key: "Post Booking calls", label: "Post Booking calls", sheetIndex: 81, type: "text" },
-  { key: "Post Booking \n- 15 Days Prior trip", label: "Post Booking - 15 Days Prior trip", sheetIndex: 82, type: "text" },
-  { key: "Pre Trip ", label: "Pre Trip", sheetIndex: 83, type: "text" },
+  { key: "Arrival Pictures shared on whatsapp group", label: "Arrival Pictures shared on whatsapp group", sheetIndex: 77, type: "text" },
+  { key: "Rating given by the customer", label: "Rating given by the customer", sheetIndex: 78, type: "text" },
+  { key: "Feedback given by the client", label: "Feedback given by the client", sheetIndex: 79, type: "text" },
+  { key: "Referrals if any", label: "Referrals if any", sheetIndex: 80, type: "text" },
+  { key: "Post Booking calls", label: "Post Booking calls", sheetIndex: 82, type: "text" },
+  { key: "Post Booking \n- 15 Days Prior trip", label: "Post Booking - 15 Days Prior trip", sheetIndex: 83, type: "text" },
+  { key: "Pre Trip ", label: "Pre Trip", sheetIndex: 84, type: "text" },
   { 
     key: "Trip Status", 
     label: "Trip Status", 
-    sheetIndex: 84, 
+    sheetIndex: 85, 
     type: "select", 
     options: ["Confirmed", "Dropped after Booking", "OnTrip"] 
   }
@@ -590,7 +590,7 @@ export function DynamicBookingForm({ onSubmit, onCancel, booking, onRemove, mode
     }
 
     // Also populate duplicate first installment column if present in the spreadsheet
-    baseRow[61] = formData["Instalment 1"] || "0"; 
+    baseRow[62] = formData["Instalment 1"] || "0"; 
 
     // Reconstruct Booking object for local list
     const newBooking: Booking = {

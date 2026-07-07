@@ -288,9 +288,9 @@ function Dashboard() {
     }
 
     let indexToUpdate = -1;
-    if (taskNumber === 1) indexToUpdate = 25; // 1st Call status
-    else if (taskNumber === 2) indexToUpdate = 81; // Post Booking calls
-    else if (taskNumber === 3) indexToUpdate = 83; // Pre Trip
+    if (taskNumber === 1) indexToUpdate = 26; // 1st Call status
+    else if (taskNumber === 2) indexToUpdate = 82; // Post Booking calls
+    else if (taskNumber === 3) indexToUpdate = 84; // Pre Trip
 
     if (indexToUpdate !== -1) {
       updatedRaw[indexToUpdate] = completed ? "Done" : "";
