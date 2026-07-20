@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, Dispatch, SetStateAction } from "react";
-import { type Booking, daysUntil } from "@/lib/sheet.functions";
+import { type Booking, daysUntil, updateBookingInSheet } from "@/lib/sheet.functions";
 import { getPNComment, savePNComment, pushEditLog } from "@/lib/comments";
 import {
   Dialog,
@@ -133,30 +133,52 @@ export function VoucherReleaseTab({
 
   const handleSaveComment = useCallback(async (pn: string) => {
     const text = draftComments[pn] ?? "";
-    const success = await savePNComment(pn, "vouch", text);
-    if (success) {
-      setAllComments((prev) => ({ ...prev, [pn]: text.trim() }));
-      setExpandedComments((prev) => ({ ...prev, [pn]: false }));
-      const userRaw = localStorage.getItem("travclan_user_session");
-      const user = userRaw ? JSON.parse(userRaw) : null;
-      pushEditLog(pn, text.trim() ? `Updated voucher comment: "${text.trim()}"` : "Cleared voucher comment", user?.name || "Unknown Operator", user?.email || "");
+    const clean = text.trim();
+    setAllComments((prev) => ({ ...prev, [pn]: clean }));
+    setExpandedComments((prev) => ({ ...prev, [pn]: false }));
+    
+    // Save to KeyVal and local storage
+    savePNComment(pn, "vouch", clean);
+
+    // Sync to Google Sheet (col 87 / CH)
+    const booking = bookings.find((b) => b.pn === pn);
+    if (booking && booking.rawData) {
+      const updatedRaw = [...booking.rawData];
+      while (updatedRaw.length < 94) updatedRaw.push("");
+      updatedRaw[87] = clean;
+      updateBookingInSheet({ pn, values: updatedRaw }).catch((err) =>
+        console.warn("Failed to sync voucher comment to sheet:", err)
+      );
     }
-  }, [draftComments]);
+
+    const userRaw = localStorage.getItem("travclan_user_session");
+    const user = userRaw ? JSON.parse(userRaw) : null;
+    pushEditLog(pn, clean ? `Updated voucher comment: "${clean}"` : "Cleared voucher comment", user?.name || "Unknown Operator", user?.email || "");
+  }, [draftComments, bookings]);
 
   const handleClearComment = useCallback(async (pn: string) => {
-    const success = await savePNComment(pn, "vouch", "");
-    if (success) {
-      setAllComments((prev) => {
-        const copy = { ...prev };
-        delete copy[pn];
-        return copy;
-      });
-      setDraftComments((prev) => ({ ...prev, [pn]: "" }));
-      const userRaw = localStorage.getItem("travclan_user_session");
-      const user = userRaw ? JSON.parse(userRaw) : null;
-      pushEditLog(pn, "Cleared voucher comment", user?.name || "Unknown Operator", user?.email || "");
+    setAllComments((prev) => {
+      const copy = { ...prev };
+      delete copy[pn];
+      return copy;
+    });
+    setDraftComments((prev) => ({ ...prev, [pn]: "" }));
+    savePNComment(pn, "vouch", "");
+
+    const booking = bookings.find((b) => b.pn === pn);
+    if (booking && booking.rawData) {
+      const updatedRaw = [...booking.rawData];
+      while (updatedRaw.length < 94) updatedRaw.push("");
+      updatedRaw[87] = "";
+      updateBookingInSheet({ pn, values: updatedRaw }).catch((err) =>
+        console.warn("Failed to clear voucher comment from sheet:", err)
+      );
     }
-  }, []);
+
+    const userRaw = localStorage.getItem("travclan_user_session");
+    const user = userRaw ? JSON.parse(userRaw) : null;
+    pushEditLog(pn, "Cleared voucher comment", user?.name || "Unknown Operator", user?.email || "");
+  }, [bookings]);
 
   // Derived milestones for future trips (Travel Date >= Today)
   const enrichedBookings = useMemo(() => {
@@ -304,17 +326,25 @@ export function VoucherReleaseTab({
     }
     return [];
   }, [enrichedBookings, activeModal]);
-  // Fetch comments from shared database when modal opens
+  // Fetch comments from sheet & shared database
   useEffect(() => {
-    if (!activeModal || modalBookings.length === 0) return;
+    if (enrichedBookings.length === 0) return;
 
-    setIsLoadingComments(true);
-    const pns = modalBookings.map((b) => b.pn);
+    // Seed initial comments from sheet (column CH / voucherComment)
+    const initialMap: Record<string, string> = {};
+    enrichedBookings.forEach((b) => {
+      if (b.voucherComment) {
+        initialMap[b.pn] = b.voucherComment;
+      }
+    });
+    setAllComments((prev) => ({ ...initialMap, ...prev }));
 
+    // Fetch remote updates for active bookings
+    const targetBookings = activeModal ? modalBookings : enrichedBookings.slice(0, 50);
     Promise.all(
-      pns.map(async (pn) => {
-        const val = await getPNComment(pn, "vouch");
-        return { pn, val };
+      targetBookings.map(async (b) => {
+        const remoteVal = await getPNComment(b.pn, "vouch");
+        return { pn: b.pn, val: remoteVal || b.voucherComment || "" };
       })
     ).then((results) => {
       const map: Record<string, string> = {};
@@ -322,9 +352,8 @@ export function VoucherReleaseTab({
         if (r.val) map[r.pn] = r.val;
       });
       setAllComments((prev) => ({ ...prev, ...map }));
-      setIsLoadingComments(false);
     });
-  }, [activeModal, modalBookings]);
+  }, [activeModal, modalBookings, enrichedBookings]);
   // Table dataset filters
   const filteredBookings = useMemo(() => {
     let result = enrichedBookings;

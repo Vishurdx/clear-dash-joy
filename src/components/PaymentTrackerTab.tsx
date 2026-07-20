@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
-import { type Booking, daysUntil, inr } from "@/lib/sheet.functions";
+import { type Booking, daysUntil, inr, updateBookingInSheet } from "@/lib/sheet.functions";
 import { getPNComment, savePNComment, pushEditLog } from "@/lib/comments";
 import {
   Dialog,
@@ -43,30 +43,52 @@ export function PaymentTrackerTab({
 
   const handleSaveComment = useCallback(async (pn: string) => {
     const text = draftComments[pn] ?? "";
-    const success = await savePNComment(pn, "inst", text);
-    if (success) {
-      setAllComments((prev) => ({ ...prev, [pn]: text.trim() }));
-      setExpandedComments((prev) => ({ ...prev, [pn]: false }));
-      const userRaw = localStorage.getItem("travclan_user_session");
-      const user = userRaw ? JSON.parse(userRaw) : null;
-      pushEditLog(pn, text.trim() ? `Updated installment comment: "${text.trim()}"` : "Cleared installment comment", user?.name || "Unknown Operator", user?.email || "");
+    const clean = text.trim();
+    setAllComments((prev) => ({ ...prev, [pn]: clean }));
+    setExpandedComments((prev) => ({ ...prev, [pn]: false }));
+
+    // Save to KeyVal and local storage
+    savePNComment(pn, "inst", clean);
+
+    // Sync to Google Sheet (col 85 / CF)
+    const booking = bookings.find((b) => b.pn === pn);
+    if (booking && booking.rawData) {
+      const updatedRaw = [...booking.rawData];
+      while (updatedRaw.length < 94) updatedRaw.push("");
+      updatedRaw[85] = clean;
+      updateBookingInSheet({ pn, values: updatedRaw }).catch((err) =>
+        console.warn("Failed to sync installment comment to sheet:", err)
+      );
     }
-  }, [draftComments]);
+
+    const userRaw = localStorage.getItem("travclan_user_session");
+    const user = userRaw ? JSON.parse(userRaw) : null;
+    pushEditLog(pn, clean ? `Updated installment comment: "${clean}"` : "Cleared installment comment", user?.name || "Unknown Operator", user?.email || "");
+  }, [draftComments, bookings]);
 
   const handleClearComment = useCallback(async (pn: string) => {
-    const success = await savePNComment(pn, "inst", "");
-    if (success) {
-      setAllComments((prev) => {
-        const copy = { ...prev };
-        delete copy[pn];
-        return copy;
-      });
-      setDraftComments((prev) => ({ ...prev, [pn]: "" }));
-      const userRaw = localStorage.getItem("travclan_user_session");
-      const user = userRaw ? JSON.parse(userRaw) : null;
-      pushEditLog(pn, "Cleared installment comment", user?.name || "Unknown Operator", user?.email || "");
+    setAllComments((prev) => {
+      const copy = { ...prev };
+      delete copy[pn];
+      return copy;
+    });
+    setDraftComments((prev) => ({ ...prev, [pn]: "" }));
+    savePNComment(pn, "inst", "");
+
+    const booking = bookings.find((b) => b.pn === pn);
+    if (booking && booking.rawData) {
+      const updatedRaw = [...booking.rawData];
+      while (updatedRaw.length < 94) updatedRaw.push("");
+      updatedRaw[85] = "";
+      updateBookingInSheet({ pn, values: updatedRaw }).catch((err) =>
+        console.warn("Failed to clear installment comment from sheet:", err)
+      );
     }
-  }, []);
+
+    const userRaw = localStorage.getItem("travclan_user_session");
+    const user = userRaw ? JSON.parse(userRaw) : null;
+    pushEditLog(pn, "Cleared installment comment", user?.name || "Unknown Operator", user?.email || "");
+  }, [bookings]);
 
   // Filter bookings for the payment tracker dashboard:
   // - Exclude dropped bookings
@@ -212,17 +234,25 @@ export function PaymentTrackerTab({
     });
     return rawModal;
   }, [activeBookings, activeModal]);
-  // Fetch comments from shared database when modal opens
+  // Fetch comments from sheet & shared database
   useEffect(() => {
-    if (!activeModal || modalBookings.length === 0) return;
+    if (activeBookings.length === 0) return;
 
-    setIsLoadingComments(true);
-    const pns = modalBookings.map((b) => b.pn);
+    // Seed initial comments from sheet (column CF / installmentComment)
+    const initialMap: Record<string, string> = {};
+    activeBookings.forEach((b) => {
+      if (b.installmentComment) {
+        initialMap[b.pn] = b.installmentComment;
+      }
+    });
+    setAllComments((prev) => ({ ...initialMap, ...prev }));
 
+    // Fetch remote updates for active bookings
+    const targetBookings = activeModal ? modalBookings : activeBookings.slice(0, 50);
     Promise.all(
-      pns.map(async (pn) => {
-        const val = await getPNComment(pn, "inst");
-        return { pn, val };
+      targetBookings.map(async (b) => {
+        const remoteVal = await getPNComment(b.pn, "inst");
+        return { pn: b.pn, val: remoteVal || b.installmentComment || "" };
       })
     ).then((results) => {
       const map: Record<string, string> = {};
@@ -230,9 +260,8 @@ export function PaymentTrackerTab({
         if (r.val) map[r.pn] = r.val;
       });
       setAllComments((prev) => ({ ...prev, ...map }));
-      setIsLoadingComments(false);
     });
-  }, [activeModal, modalBookings]);
+  }, [activeModal, modalBookings, activeBookings]);
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white">

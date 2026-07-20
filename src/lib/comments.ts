@@ -56,10 +56,12 @@ export async function savePNComment(pn: string, type: "inst" | "vouch", text: st
 
     const valToSend = cleanText ? `b64:${toBase64Url(cleanText)}` : "_EMPTY_";
     const url = `https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/${APP_KEY}/${key}/${valToSend}`;
-    const resp = await fetch(url, { method: "POST" });
-    if (!resp.ok) {
-      console.warn("KeyVal remote save non-ok status:", resp.status);
-      return true; // Return true because local cache succeeded
+    
+    // Attempt standard fetch first, fallback to no-cors mode if browser blocks CORS preflight
+    try {
+      await fetch(url, { method: "POST" });
+    } catch {
+      await fetch(url, { method: "POST", mode: "no-cors" }).catch(() => {});
     }
     return true;
   } catch (e) {
