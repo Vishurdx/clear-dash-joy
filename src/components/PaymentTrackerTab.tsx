@@ -100,7 +100,7 @@ export function PaymentTrackerTab({
       if (travelDays > 30) {
         const i2Days = daysUntil(b.installment2Date);
         const i3Days = daysUntil(b.installment3Date);
-        const focDays = daysUntil(b.freeCancellationDate);
+        const focDays = daysUntil(b.effectiveFocDate || b.freeCancellationDate);
 
         const i2Due = i2Days !== null && i2Days <= 0 && !inst2Settled;
         const i3Due = i3Days !== null && i3Days <= 0 && !inst3Settled;
@@ -122,14 +122,14 @@ export function PaymentTrackerTab({
   );
   const foc7Count = useMemo(
     () => activeBookings.filter((b) => {
-      const fc = daysUntil(b.freeCancellationDate);
+      const fc = daysUntil(b.effectiveFocDate || b.freeCancellationDate);
       return fc !== null && fc >= 4 && fc <= 7 && b.paymentCollected?.toLowerCase() !== "yes";
     }).length,
     [activeBookings]
   );
   const foc3Count = useMemo(
     () => activeBookings.filter((b) => {
-      const fc = daysUntil(b.freeCancellationDate);
+      const fc = daysUntil(b.effectiveFocDate || b.freeCancellationDate);
       return fc !== null && fc <= 3 && b.paymentCollected?.toLowerCase() !== "yes";
     }).length,
     [activeBookings]
@@ -148,7 +148,7 @@ export function PaymentTrackerTab({
     if (!quickFilter) return activeBookings;
     const filtered = activeBookings.filter((b) => {
       const td = daysUntil(b.travelDate);
-      const fc = daysUntil(b.freeCancellationDate);
+      const fc = daysUntil(b.effectiveFocDate || b.freeCancellationDate);
       const i2 = daysUntil(b.installment2Date);
       const i3 = daysUntil(b.installment3Date);
       const notPaid = b.paymentCollected?.toLowerCase() !== "yes";
@@ -173,8 +173,8 @@ export function PaymentTrackerTab({
 
     // Sort by earliest Free Cancellation, then earliest Travel Date, then highest pending amount
     const sorted = filtered.slice().sort((a, b) => {
-      const fcA = daysUntil(a.freeCancellationDate) ?? Infinity;
-      const fcB = daysUntil(b.freeCancellationDate) ?? Infinity;
+      const fcA = daysUntil(a.effectiveFocDate || a.freeCancellationDate) ?? Infinity;
+      const fcB = daysUntil(b.effectiveFocDate || b.freeCancellationDate) ?? Infinity;
       if (fcA !== fcB) return fcA - fcB;
       const tdA = daysUntil(a.travelDate) ?? Infinity;
       const tdB = daysUntil(b.travelDate) ?? Infinity;
@@ -189,7 +189,7 @@ export function PaymentTrackerTab({
     if (!activeModal) return [];
     const rawModal = activeBookings.filter((b) => {
       const td = daysUntil(b.travelDate);
-      const fc = daysUntil(b.freeCancellationDate);
+      const fc = daysUntil(b.effectiveFocDate || b.freeCancellationDate);
       const i2 = daysUntil(b.installment2Date);
       const i3 = daysUntil(b.installment3Date);
       const notPaid = b.paymentCollected?.toLowerCase() !== "yes";
@@ -408,12 +408,19 @@ export function PaymentTrackerTab({
                     )}
                   </td>
                   <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                    {b.freeCancellationDate || "—"}
-                    {daysUntil(b.freeCancellationDate) !== null && (
-                      <span className={`ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                        daysUntil(b.freeCancellationDate)! <= 3 ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
+                    <div>
+                      <span>{b.effectiveFocDate || b.freeCancellationDate || "—"}</span>
+                      {b.isFocShifted && (
+                        <span className="ml-1.5 text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded" title="FOC shifted to 10 days prior to travel date because 2nd Installment is received">
+                          Shifted (T-10d)
+                        </span>
+                      )}
+                    </div>
+                    {daysUntil(b.effectiveFocDate || b.freeCancellationDate) !== null && (
+                      <span className={`mt-0.5 inline-block text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        daysUntil(b.effectiveFocDate || b.freeCancellationDate)! <= 3 ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
                       }`}>
-                        {daysUntil(b.freeCancellationDate)! <= 0 ? "Expired" : `${daysUntil(b.freeCancellationDate)}d`}
+                        {daysUntil(b.effectiveFocDate || b.freeCancellationDate)! <= 0 ? "Expired" : `${daysUntil(b.effectiveFocDate || b.freeCancellationDate)}d`}
                       </span>
                     )}
                   </td>
@@ -546,12 +553,19 @@ export function PaymentTrackerTab({
                           )}
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap">
-                          {b.freeCancellationDate || "—"}
-                          {daysUntil(b.freeCancellationDate) !== null && (
-                            <span className={`ml-1.5 text-[9px] font-bold px-1 py-0.2 rounded ${
-                              daysUntil(b.freeCancellationDate)! <= 3 ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
+                          <div>
+                            <span>{b.effectiveFocDate || b.freeCancellationDate || "—"}</span>
+                            {b.isFocShifted && (
+                              <span className="ml-1 text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1 py-0.2 rounded" title="FOC shifted to 10 days prior to travel date because 2nd Installment is received">
+                                Shifted (T-10d)
+                              </span>
+                            )}
+                          </div>
+                          {daysUntil(b.effectiveFocDate || b.freeCancellationDate) !== null && (
+                            <span className={`mt-0.5 inline-block text-[9px] font-bold px-1 py-0.2 rounded ${
+                              daysUntil(b.effectiveFocDate || b.freeCancellationDate)! <= 3 ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
                             }`}>
-                              {daysUntil(b.freeCancellationDate)! <= 0 ? "Expired" : `${daysUntil(b.freeCancellationDate)}d`}
+                              {daysUntil(b.effectiveFocDate || b.freeCancellationDate)! <= 0 ? "Expired" : `${daysUntil(b.effectiveFocDate || b.freeCancellationDate)}d`}
                             </span>
                           )}
                         </td>

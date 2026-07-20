@@ -166,7 +166,11 @@ export function VoucherReleaseTab({
         const isFuture = td !== null && td >= 0;
 
         const flightVoucherLower = b.flightVoucher?.toLowerCase() || "";
-        const flightIncluded = (b.flightSp ?? 0) > 0;
+        const flightIncluded =
+          (b.flightSp ?? 0) > 0 ||
+          (flightVoucherLower !== "" &&
+           flightVoucherLower !== "not applicable" &&
+           flightVoucherLower !== "n/a");
 
         const hotelVoucherLower = b.hotelVoucher?.toLowerCase() || "";
         const hotelIncluded =
@@ -191,19 +195,14 @@ export function VoucherReleaseTab({
         const inst1StatusLower = b.installment1Status?.toLowerCase() || "";
         const inst1Received = inst1StatusLower === "received" || inst1StatusLower === "not applicable";
 
-        // Second Installment logic: ((final amount (column AP) - 1st installment amount (BI column))/2) > pending amount (BS column)
-        const finalAmt = b.finalTtv ?? 0;
-        const inst1Amt = b.installment1Amount ?? 0;
-        const pendingAmt = b.pendingAmount ?? 0;
-        
-        const formulaReceived = ((finalAmt - inst1Amt) / 2) > pendingAmt;
         const inst2StatusLower = b.installment2Status?.toLowerCase() || "";
-        const inst2Received = formulaReceived || inst2StatusLower === "received" || inst2StatusLower === "not applicable";
+        const inst2Received = inst2StatusLower === "received" || inst2StatusLower === "not applicable";
 
         const inst3StatusLower = b.installment3Status?.toLowerCase() || "";
         const inst3Received = inst3StatusLower === "received" || inst3StatusLower === "not applicable";
         
         // Final Payment Collected = pending amount (column BS) is 0
+        const pendingAmt = b.pendingAmount ?? 0;
         const finalPaymentCollected = pendingAmt === 0;
 
         // Eligibility rules
@@ -260,12 +259,12 @@ export function VoucherReleaseTab({
     let criticalVoucherPendingCount = 0;
 
     for (const b of enrichedBookings) {
-      // 1. Flight Voucher Not Shared
-      if (b.flightIncluded && b.inst1Received && !b.flightVoucherShared) {
+      // 1. Flight Voucher Not Shared (All bookings with flight included and flight voucher not shared)
+      if (b.flightIncluded && !b.flightVoucherShared) {
         flightVoucherNotSharedCount++;
       }
 
-      // 2. Hotel Voucher Not Shared
+      // 2. Hotel Voucher Not Shared (Installment 2 Received & Hotel Voucher Not Shared)
       if (b.inst2Received && !b.hotelVoucherShared && b.hotelIncluded) {
         hotelVoucherNotSharedCount++;
       }
@@ -292,7 +291,7 @@ export function VoucherReleaseTab({
   // Modal dataset filters
   const modalBookings = useMemo(() => {
     if (activeModal === "flight-not-shared") {
-      return enrichedBookings.filter((b) => b.flightIncluded && b.inst1Received && !b.flightVoucherShared);
+      return enrichedBookings.filter((b) => b.flightIncluded && !b.flightVoucherShared);
     }
     if (activeModal === "hotel-not-shared") {
       return enrichedBookings.filter((b) => b.inst2Received && !b.hotelVoucherShared && b.hotelIncluded);

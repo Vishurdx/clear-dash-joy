@@ -18,6 +18,8 @@ export type Booking = {
   destination: string;
   travelDate: string; // ISO date string (e.g., "2024-12-31")
   freeCancellationDate: string; // "FOC" date
+  effectiveFocDate?: string; // Website-only effective FOC date (shifts to T-10d if inst 2 received)
+  isFocShifted?: boolean; // Indicates if FOC date was shifted due to inst 2 payment
   installment1Date?: string; // Due date for installment 1 (column BH / Index 59)
   installment1Status?: string; // Status for installment 1 (column BK / Index 62)
   installment1Amount?: number; // 1st installment amount (BI column / Index 60)
@@ -95,6 +97,37 @@ export function daysSince(dateStr: string | undefined | null): number | null {
 }
 
 /**
+ * Website-only concept:
+ * If a guest pays 2nd installment (installment2Status is "Received" or "Not Applicable"),
+ * their FOC for 3rd installment (Land package) shifts to 10 days prior to their travel date.
+ */
+export function getEffectiveFoc(b: {
+  freeCancellationDate?: string;
+  travelDate?: string;
+  installment2Status?: string;
+}): { focDate: string; isShifted: boolean } {
+  const rawFoc = b.freeCancellationDate || "";
+  const inst2Status = b.installment2Status?.toLowerCase() || "";
+  const inst2Received = inst2Status === "received" || inst2Status === "not applicable";
+
+  if (inst2Received && b.travelDate) {
+    const tDate = new Date(b.travelDate);
+    if (!isNaN(tDate.getTime())) {
+      const focDate = new Date(tDate);
+      focDate.setDate(focDate.getDate() - 10);
+      const m = focDate.getMonth() + 1;
+      const d = focDate.getDate();
+      const y = focDate.getFullYear();
+      return {
+        focDate: `${m}/${d}/${y}`,
+        isShifted: true,
+      };
+    }
+  }
+  return { focDate: rawFoc, isShifted: false };
+}
+
+/**
  * Format a number as Indian Rupees (₹) with commas.
  */
 export function inr(amount: number | undefined): string {
@@ -144,12 +177,23 @@ export async function fetchBookings(): Promise<{
       return pn.startsWith("PN-");
     })
     .map((row) => {
+      const rawFoc = row[5]?.toString()?.trim() || "";
+      const travelDate = row[4]?.toString()?.trim() || "";
+      const inst2Status = row[66]?.toString()?.trim() || "";
+      const focInfo = getEffectiveFoc({
+        freeCancellationDate: rawFoc,
+        travelDate,
+        installment2Status: inst2Status,
+      });
+
       return {
         pn: row[2]?.toString()?.trim() || "",
         leadPax: row[12]?.toString()?.trim() || "",
         destination: row[16]?.toString()?.trim() || "",
-        travelDate: row[4]?.toString()?.trim() || "",
-        freeCancellationDate: row[5]?.toString()?.trim() || "",
+        travelDate,
+        freeCancellationDate: rawFoc,
+        effectiveFocDate: focInfo.focDate,
+        isFocShifted: focInfo.isShifted,
         dailyUpdates: row[1]?.toString()?.trim() || "",
         createdDate: row[10]?.toString()?.trim() || "",
         installment1Date: row[60]?.toString()?.trim() || "",

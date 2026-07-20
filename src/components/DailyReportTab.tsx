@@ -252,7 +252,7 @@ export function DailyReportTab({ bookings, isLoading, onSelectBooking, onUpdateC
                     {hasBookings ? (
                       <div className="space-y-2">
                         {day.bookings.map((b) => {
-                          const focDate = formatFocDate(b.freeCancellationDate);
+                          const focDate = formatFocDate(b.effectiveFocDate || b.freeCancellationDate);
                           const comment = b.dailyUpdates || "";
                           
                           return (
@@ -268,7 +268,7 @@ export function DailyReportTab({ bookings, isLoading, onSelectBooking, onUpdateC
                                 <div className="text-slate-600 flex items-center gap-1.5 flex-wrap">
                                   {focDate && (
                                     <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold mr-1 border border-slate-200/50">
-                                      FOC: {focDate}
+                                      FOC: {focDate} {b.isFocShifted ? "(Shifted T-10d)" : ""}
                                     </span>
                                   )}
                                   
