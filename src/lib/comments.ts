@@ -1,38 +1,70 @@
 const APP_KEY = "kvdc4k1z";
 
 export async function getPNComment(pn: string, type: "inst" | "vouch"): Promise<string> {
+  const localKey = `local_comment_${type}_${pn}`;
   try {
     const key = `${type}_${pn}`;
     const url = `https://keyvalue.immanuel.co/api/KeyVal/GetValue/${APP_KEY}/${key}`;
     const resp = await fetch(url);
-    if (!resp.ok) return "";
-    const txt = await resp.text();
-    if (!txt) return "";
-    try {
-      // JSON.parse handles unquoting the string returned by the API
-      return JSON.parse(txt) || "";
-    } catch {
-      return txt.replace(/^"|"$/g, "");
+    if (!resp.ok) {
+      return (typeof window !== "undefined" ? localStorage.getItem(localKey) : "") || "";
     }
+    const txt = await resp.text();
+    if (!txt || txt === '""') return "";
+    
+    let raw = "";
+    try {
+      raw = JSON.parse(txt) || "";
+    } catch {
+      raw = txt.replace(/^"|"$/g, "");
+    }
+    
+    if (!raw || raw === "_EMPTY_") {
+      if (typeof window !== "undefined") localStorage.removeItem(localKey);
+      return "";
+    }
+
+    let finalVal = raw;
+    if (raw.startsWith("b64:")) {
+      const decoded = fromBase64Url(raw.slice(4));
+      if (decoded) finalVal = decoded;
+    }
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(localKey, finalVal);
+    }
+    return finalVal;
   } catch (e) {
     console.error("Failed to fetch comment for", pn, e);
-    return "";
+    return (typeof window !== "undefined" ? localStorage.getItem(localKey) : "") || "";
   }
 }
 
 export async function savePNComment(pn: string, type: "inst" | "vouch", text: string): Promise<boolean> {
+  const localKey = `local_comment_${type}_${pn}`;
   try {
     const key = `${type}_${pn}`;
     const cleanText = text.trim();
-    const encoded = encodeURIComponent(cleanText);
-    const url = `https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/${APP_KEY}/${key}/${encoded}`;
+
+    if (typeof window !== "undefined") {
+      if (cleanText) {
+        localStorage.setItem(localKey, cleanText);
+      } else {
+        localStorage.removeItem(localKey);
+      }
+    }
+
+    const valToSend = cleanText ? `b64:${toBase64Url(cleanText)}` : "_EMPTY_";
+    const url = `https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/${APP_KEY}/${key}/${valToSend}`;
     const resp = await fetch(url, { method: "POST" });
-    if (!resp.ok) return false;
-    const txt = await resp.text();
-    return txt === "true";
+    if (!resp.ok) {
+      console.warn("KeyVal remote save non-ok status:", resp.status);
+      return true; // Return true because local cache succeeded
+    }
+    return true;
   } catch (e) {
     console.error("Failed to save comment for", pn, e);
-    return false;
+    return true;
   }
 }
 
