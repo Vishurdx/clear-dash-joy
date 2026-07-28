@@ -97,8 +97,61 @@ export function daysSince(dateStr: string | undefined | null): number | null {
 }
 
 /**
+ * Helper to determine if an installment status indicates payment has been settled/received.
+ * Recognizes "Received", "Paid", "Done", "Yes", "Completed", "Not Applicable", "N/A",
+ * as well as payment date strings like "7/10/2026", "2026-07-10".
+ */
+export function isInstallmentSettled(status: string | undefined | null): boolean {
+  if (!status) return false;
+  const s = status.trim();
+  if (!s) return false;
+  const lower = s.toLowerCase();
+
+  if (
+    lower === "not received" ||
+    lower === "pending" ||
+    lower === "due" ||
+    lower === "unpaid" ||
+    lower === "no" ||
+    lower === "false" ||
+    lower === "—" ||
+    lower === "-"
+  ) {
+    return false;
+  }
+
+  if (
+    lower === "received" ||
+    lower === "paid" ||
+    lower === "done" ||
+    lower === "yes" ||
+    lower === "true" ||
+    lower === "completed" ||
+    lower === "ok" ||
+    lower === "not applicable" ||
+    lower === "n/a" ||
+    lower === "na" ||
+    lower === "n.a."
+  ) {
+    return true;
+  }
+
+  // Check if status is a valid date string (indicating payment received on date)
+  if (/^\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}$/.test(s)) {
+    return true;
+  }
+
+  const parsed = Date.parse(s);
+  if (!isNaN(parsed)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Website-only concept:
- * If a guest pays 2nd installment (installment2Status is "Received" or "Not Applicable"),
+ * If a guest pays 2nd installment (installment2Status is settled or payment date set),
  * their FOC for 3rd installment (Land package) shifts to 10 days prior to their travel date.
  */
 export function getEffectiveFoc(b: {
@@ -107,8 +160,7 @@ export function getEffectiveFoc(b: {
   installment2Status?: string;
 }): { focDate: string; isShifted: boolean } {
   const rawFoc = b.freeCancellationDate || "";
-  const inst2Status = b.installment2Status?.toLowerCase() || "";
-  const inst2Received = inst2Status === "received" || inst2Status === "not applicable";
+  const inst2Received = isInstallmentSettled(b.installment2Status);
 
   if (inst2Received && b.travelDate) {
     const tDate = new Date(b.travelDate);

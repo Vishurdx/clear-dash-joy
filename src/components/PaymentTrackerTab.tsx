@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
-import { type Booking, daysUntil, inr, updateBookingInSheet } from "@/lib/sheet.functions";
-import { getPNComment, savePNComment, pushEditLog } from "@/lib/comments";
+import { type Booking, daysUntil, inr, updateBookingInSheet, isInstallmentSettled } from "@/lib/sheet.functions";
+import { getPNComment, savePNComment, pushEditLog, subscribeToCommentChanges } from "@/lib/comments";
 import {
   Dialog,
   DialogContent,
@@ -93,13 +93,8 @@ export function PaymentTrackerTab({
   // Filter bookings for the payment tracker dashboard:
   // - Exclude dropped bookings
   // - Keep only bookings with travel date (DOT) after tomorrow
-  // - Exclude bookings whose installments are all received or not applicable
+  // - Exclude bookings whose relevant installments are received or settled
   const activeBookings = useMemo(() => {
-    const isSettled = (s: string | undefined | null) => {
-      const lower = s?.trim().toLowerCase();
-      return lower === "received" || lower === "not applicable";
-    };
-
     return bookings.filter((b) => {
       if (b.tripStatus && b.tripStatus.toLowerCase().includes("dropped")) {
         return false;
@@ -110,11 +105,12 @@ export function PaymentTrackerTab({
         return false;
       }
 
-      const inst2Settled = isSettled(b.installment2Status);
-      const inst3Settled = isSettled(b.installment3Status);
+      const inst2Settled = isInstallmentSettled(b.installment2Status);
+      const inst3Settled = isInstallmentSettled(b.installment3Status);
+      const isPaid = b.paymentCollected?.toLowerCase() === "yes" || (b.pendingAmount ?? 0) === 0;
 
-      // If the relevant installments are settled, it shouldn't show
-      if (inst2Settled && inst3Settled) {
+      // If the relevant installments are settled or payment fully collected, it shouldn't show
+      if (isPaid || (inst2Settled && inst3Settled)) {
         return false;
       }
 
@@ -126,7 +122,8 @@ export function PaymentTrackerTab({
 
         const i2Due = i2Days !== null && i2Days <= 0 && !inst2Settled;
         const i3Due = i3Days !== null && i3Days <= 0 && !inst3Settled;
-        const focDue = focDays !== null && focDays <= 7 && b.paymentCollected?.toLowerCase() !== "yes";
+        const focPending = inst2Settled ? !inst3Settled : !inst2Settled;
+        const focDue = focDays !== null && focDays <= 7 && focPending;
 
         if (!i2Due && !i3Due && !focDue) {
           return false;
@@ -145,23 +142,29 @@ export function PaymentTrackerTab({
   const foc7Count = useMemo(
     () => activeBookings.filter((b) => {
       const fc = daysUntil(b.effectiveFocDate || b.freeCancellationDate);
-      return fc !== null && fc >= 4 && fc <= 7 && b.paymentCollected?.toLowerCase() !== "yes";
+      const inst2Settled = isInstallmentSettled(b.installment2Status);
+      const inst3Settled = isInstallmentSettled(b.installment3Status);
+      const hasFocPending = inst2Settled ? !inst3Settled : !inst2Settled;
+      return fc !== null && fc >= 4 && fc <= 7 && hasFocPending;
     }).length,
     [activeBookings]
   );
   const foc3Count = useMemo(
     () => activeBookings.filter((b) => {
       const fc = daysUntil(b.effectiveFocDate || b.freeCancellationDate);
-      return fc !== null && fc <= 3 && b.paymentCollected?.toLowerCase() !== "yes";
+      const inst2Settled = isInstallmentSettled(b.installment2Status);
+      const inst3Settled = isInstallmentSettled(b.installment3Status);
+      const hasFocPending = inst2Settled ? !inst3Settled : !inst2Settled;
+      return fc !== null && fc <= 3 && hasFocPending;
     }).length,
     [activeBookings]
   );
   const inst2Count = useMemo(
-    () => activeBookings.filter((b) => daysUntil(b.installment2Date) !== null && daysUntil(b.installment2Date)! <= 0 && b.installment2Status?.toLowerCase() !== "received").length,
+    () => activeBookings.filter((b) => daysUntil(b.installment2Date) !== null && daysUntil(b.installment2Date)! <= 0 && !isInstallmentSettled(b.installment2Status)).length,
     [activeBookings]
   );
   const inst3Count = useMemo(
-    () => activeBookings.filter((b) => daysUntil(b.installment3Date) !== null && daysUntil(b.installment3Date)! <= 0 && b.installment3Status?.toLowerCase() !== "received").length,
+    () => activeBookings.filter((b) => daysUntil(b.installment3Date) !== null && daysUntil(b.installment3Date)! <= 0 && !isInstallmentSettled(b.installment3Status)).length,
     [activeBookings]
   );
 
@@ -173,21 +176,22 @@ export function PaymentTrackerTab({
       const fc = daysUntil(b.effectiveFocDate || b.freeCancellationDate);
       const i2 = daysUntil(b.installment2Date);
       const i3 = daysUntil(b.installment3Date);
-      const notPaid = b.paymentCollected?.toLowerCase() !== "yes";
-      const i2NotRec = b.installment2Status?.toLowerCase() !== "received";
-      const i3NotRec = b.installment3Status?.toLowerCase() !== "received";
+      const notPaid = b.paymentCollected?.toLowerCase() !== "yes" && (b.pendingAmount ?? 0) > 0;
+      const inst2Settled = isInstallmentSettled(b.installment2Status);
+      const inst3Settled = isInstallmentSettled(b.installment3Status);
+      const hasFocPending = inst2Settled ? !inst3Settled : !inst2Settled;
 
       switch (quickFilter) {
         case "dot-30-pending":
           return td !== null && td <= 30 && notPaid;
         case "foc-7-pending":
-          return fc !== null && fc >= 4 && fc <= 7 && notPaid;
+          return fc !== null && fc >= 4 && fc <= 7 && hasFocPending;
         case "foc-3-pending":
-          return fc !== null && fc <= 3 && notPaid;
+          return fc !== null && fc <= 3 && hasFocPending;
         case "inst2-due-pending":
-          return i2 !== null && i2 <= 0 && i2NotRec;
+          return i2 !== null && i2 <= 0 && !inst2Settled;
         case "inst3-due-pending":
-          return i3 !== null && i3 <= 0 && i3NotRec;
+          return i3 !== null && i3 <= 0 && !inst3Settled;
         default:
           return true;
       }
@@ -214,27 +218,30 @@ export function PaymentTrackerTab({
       const fc = daysUntil(b.effectiveFocDate || b.freeCancellationDate);
       const i2 = daysUntil(b.installment2Date);
       const i3 = daysUntil(b.installment3Date);
-      const notPaid = b.paymentCollected?.toLowerCase() !== "yes";
-      const i2NotRec = b.installment2Status?.toLowerCase() !== "received";
-      const i3NotRec = b.installment3Status?.toLowerCase() !== "received";
+      const notPaid = b.paymentCollected?.toLowerCase() !== "yes" && (b.pendingAmount ?? 0) > 0;
+      const inst2Settled = isInstallmentSettled(b.installment2Status);
+      const inst3Settled = isInstallmentSettled(b.installment3Status);
+      const hasFocPending = inst2Settled ? !inst3Settled : !inst2Settled;
+
       switch (activeModal) {
         case "dot-30-pending":
           return td !== null && td <= 30 && notPaid;
         case "foc-7-pending":
-          return fc !== null && fc >= 4 && fc <= 7 && notPaid;
+          return fc !== null && fc >= 4 && fc <= 7 && hasFocPending;
         case "foc-3-pending":
-          return fc !== null && fc <= 3 && notPaid;
+          return fc !== null && fc <= 3 && hasFocPending;
         case "inst2-due-pending":
-          return i2 !== null && i2 <= 0 && i2NotRec;
+          return i2 !== null && i2 <= 0 && !inst2Settled;
         case "inst3-due-pending":
-          return i3 !== null && i3 <= 0 && i3NotRec;
+          return i3 !== null && i3 <= 0 && !inst3Settled;
         default:
           return true;
       }
     });
     return rawModal;
   }, [activeBookings, activeModal]);
-  // Fetch comments from sheet & shared database
+
+  // Fetch comments & subscribe to live updates
   useEffect(() => {
     if (activeBookings.length === 0) return;
 
@@ -261,6 +268,28 @@ export function PaymentTrackerTab({
       });
       setAllComments((prev) => ({ ...prev, ...map }));
     });
+
+    // Real-time broadcast and storage listener for instant cross-tab / cross-device sync
+    const unsubscribe = subscribeToCommentChanges(({ pn, type, text }) => {
+      if (type === "inst") {
+        setAllComments((prev) => ({ ...prev, [pn]: text }));
+      }
+    });
+
+    // Background polling every 8 seconds for multi-device cross-fetch
+    const interval = setInterval(() => {
+      targetBookings.forEach(async (b) => {
+        const remoteVal = await getPNComment(b.pn, "inst");
+        if (remoteVal) {
+          setAllComments((prev) => (prev[b.pn] === remoteVal ? prev : { ...prev, [b.pn]: remoteVal }));
+        }
+      });
+    }, 8000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, [activeModal, modalBookings, activeBookings]);
   if (isLoading) {
     return (

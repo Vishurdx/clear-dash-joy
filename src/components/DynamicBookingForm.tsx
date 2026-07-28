@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { type Booking, daysUntil } from "@/lib/sheet.functions";
+import { type Booking, daysUntil, isInstallmentSettled } from "@/lib/sheet.functions";
 import { HelpCircle, ChevronDown, ChevronUp, Check, Info, Lock } from "lucide-react";
 
 interface DynamicBookingFormProps {
@@ -448,13 +448,13 @@ export function DynamicBookingForm({ onSubmit, onCancel, booking, onRemove, mode
 
     // 5. Calculate Pending Final Amount (TTV - Sum of Received Installment Amounts)
     let receivedAmount = 0;
-    if (formData["Installment 1 status"] === "Received") {
+    if (isInstallmentSettled(formData["Installment 1 status"])) {
       receivedAmount += inst1;
     }
-    if (formData["Installment 2 status"] === "Received") {
+    if (isInstallmentSettled(formData["Installment 2 status"])) {
       receivedAmount += inst2;
     }
-    if (formData["Installment 3 status"] === "Received") {
+    if (isInstallmentSettled(formData["Installment 3 status"])) {
       receivedAmount += inst3;
     }
     const pendingFinalAmount = Math.max(0, finalTtv - receivedAmount);

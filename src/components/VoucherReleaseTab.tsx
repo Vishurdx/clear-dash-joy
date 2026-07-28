@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useEffect, Dispatch, SetStateAction } from "react";
-import { type Booking, daysUntil, updateBookingInSheet } from "@/lib/sheet.functions";
-import { getPNComment, savePNComment, pushEditLog } from "@/lib/comments";
+import { type Booking, daysUntil, updateBookingInSheet, isInstallmentSettled } from "@/lib/sheet.functions";
+import { getPNComment, savePNComment, pushEditLog, subscribeToCommentChanges } from "@/lib/comments";
 import {
   Dialog,
   DialogContent,
@@ -214,14 +214,9 @@ export function VoucherReleaseTab({
         const finalVoucherNA = b.finalVoucher?.toLowerCase() === "not applicable";
         const finalVoucherShared = b.finalVoucher?.toLowerCase() === "shared" || finalVoucherNA;
 
-        const inst1StatusLower = b.installment1Status?.toLowerCase() || "";
-        const inst1Received = inst1StatusLower === "received" || inst1StatusLower === "not applicable";
-
-        const inst2StatusLower = b.installment2Status?.toLowerCase() || "";
-        const inst2Received = inst2StatusLower === "received" || inst2StatusLower === "not applicable";
-
-        const inst3StatusLower = b.installment3Status?.toLowerCase() || "";
-        const inst3Received = inst3StatusLower === "received" || inst3StatusLower === "not applicable";
+        const inst1Received = isInstallmentSettled(b.installment1Status);
+        const inst2Received = isInstallmentSettled(b.installment2Status);
+        const inst3Received = isInstallmentSettled(b.installment3Status);
         
         // Final Payment Collected = pending amount (column BS) is 0
         const pendingAmt = b.pendingAmount ?? 0;
@@ -326,7 +321,7 @@ export function VoucherReleaseTab({
     }
     return [];
   }, [enrichedBookings, activeModal]);
-  // Fetch comments from sheet & shared database
+  // Fetch comments from sheet & shared database & subscribe to live updates
   useEffect(() => {
     if (enrichedBookings.length === 0) return;
 
@@ -353,6 +348,28 @@ export function VoucherReleaseTab({
       });
       setAllComments((prev) => ({ ...prev, ...map }));
     });
+
+    // Subscribe to real-time broadcasts and storage events
+    const unsubscribe = subscribeToCommentChanges(({ pn, type, text }) => {
+      if (type === "vouch") {
+        setAllComments((prev) => ({ ...prev, [pn]: text }));
+      }
+    });
+
+    // Background polling every 8 seconds for cross-device updates
+    const interval = setInterval(() => {
+      targetBookings.forEach(async (b) => {
+        const remoteVal = await getPNComment(b.pn, "vouch");
+        if (remoteVal) {
+          setAllComments((prev) => (prev[b.pn] === remoteVal ? prev : { ...prev, [b.pn]: remoteVal }));
+        }
+      });
+    }, 8000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, [activeModal, modalBookings, enrichedBookings]);
   // Table dataset filters
   const filteredBookings = useMemo(() => {
