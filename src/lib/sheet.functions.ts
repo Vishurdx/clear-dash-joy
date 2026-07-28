@@ -229,9 +229,9 @@ export async function fetchBookings(): Promise<{
       return pn.startsWith("PN-");
     })
     .map((row) => {
-      const rawFoc = row[5]?.toString()?.trim() || "";
-      const travelDate = row[4]?.toString()?.trim() || "";
-      const inst2Status = row[66]?.toString()?.trim() || "";
+      const rawFoc = row[5]?.toString()?.trim() || ""; // Column F
+      const travelDate = row[4]?.toString()?.trim() || ""; // Column E
+      const inst2Status = row[65]?.toString()?.trim() || ""; // Column BN (2nd installment status)
       const focInfo = getEffectiveFoc({
         freeCancellationDate: rawFoc,
         travelDate,
@@ -239,58 +239,57 @@ export async function fetchBookings(): Promise<{
       });
 
       return {
-        pn: row[2]?.toString()?.trim() || "",
-        leadPax: row[12]?.toString()?.trim() || "",
-        destination: row[16]?.toString()?.trim() || "",
-        travelDate,
-        freeCancellationDate: rawFoc,
+        pn: row[2]?.toString()?.trim() || "", // Column C (PN Number)
+        leadPax: row[11]?.toString()?.trim() || "", // Column L (Lead Pax Name)
+        destination: row[15]?.toString()?.trim() || "", // Column P
+        travelDate, // Column E
+        freeCancellationDate: rawFoc, // Column F
         effectiveFocDate: focInfo.focDate,
         isFocShifted: focInfo.isShifted,
-        dailyUpdates: row[1]?.toString()?.trim() || "",
-        createdDate: row[10]?.toString()?.trim() || "",
-        installment1Date: row[60]?.toString()?.trim() || "",
-        installment1Status: row[63]?.toString()?.trim() || "",
-        installment1Amount: parseNum(row[61]),
-        installment2Date: row[64]?.toString()?.trim() || "",
-        installment2Amount: parseNum(row[65]),
-        installment2Status: row[66]?.toString()?.trim() || "",
-        installment3Date: row[67]?.toString()?.trim() || "",
-        installment3Amount: parseNum(row[68]),
-        installment3Status: row[69]?.toString()?.trim() || "",
-        paymentCollected: row[74]?.toString()?.trim() || "",
-        pendingAmount: parseNum(row[71]),
-        totalInstallmentAmount: parseNum(row[72]),
-        discrepancy: row[73]?.toString()?.trim() || "",
-        paymentReminder: row[75]?.toString()?.trim() || "",
-        opsRm: row[13]?.toString()?.trim() || "",
-        seller: row[20]?.toString()?.trim() || "",
-        finalVoucher: row[18]?.toString()?.trim() || "",
-        tripStatus: row[85]?.toString()?.trim() || "",
-        firstCallStatus: row[26]?.toString()?.trim() || "",
-        postBookingCalls: row[82]?.toString()?.trim() || "",
+        dailyUpdates: row[1]?.toString()?.trim() || "", // Column B
+        createdDate: row[9]?.toString()?.trim() || "", // Column J
+        installment1Date: row[59]?.toString()?.trim() || "", // Column BH
+        installment1Amount: parseNum(row[60]), // Column BI
+        installment1Status: row[62]?.toString()?.trim() || "", // Column BK
+        installment2Date: row[63]?.toString()?.trim() || "", // Column BL
+        installment2Amount: parseNum(row[64]), // Column BM
+        installment2Status: row[65]?.toString()?.trim() || "", // Column BN
+        installment3Date: row[66]?.toString()?.trim() || "", // Column BO
+        installment3Amount: parseNum(row[67]), // Column BP
+        installment3Status: row[68]?.toString()?.trim() || "", // Column BQ
+        pendingAmount: parseNum(row[70]), // Column BS
+        paymentCollected: row[73]?.toString()?.trim() || "", // Column BV
+        totalInstallmentAmount: parseNum(row[71]), // Column BT
+        discrepancy: row[72]?.toString()?.trim() || "", // Column BU
+        paymentReminder: row[74]?.toString()?.trim() || "", // Column BW
+        opsRm: row[12]?.toString()?.trim() || "", // Column M
+        seller: row[19]?.toString()?.trim() || "", // Column T
+        finalVoucher: row[17]?.toString()?.trim() || "", // Column R
+        matrics: row[18]?.toString()?.trim() || "", // Column S (Matrices for DOT)
+        flightVoucher: row[27]?.toString()?.trim() || "", // Column AB
+        hotelVoucher: row[29]?.toString()?.trim() || "", // Column AD
+        landVoucher: row[30]?.toString()?.trim() || "", // Column AE
+        visaVoucher: row[30]?.toString()?.trim() || "", // Column AE
+        finalTtv: parseNum(row[41]), // Column AP
+        tripStatus: row[84]?.toString()?.trim() || "",
+        firstCallStatus: row[25]?.toString()?.trim() || "",
+        postBookingCalls: row[81]?.toString()?.trim() || "",
 
         // Adults, child, infant
-        adult: parseNum(row[7]),
-        child: parseNum(row[8]),
-        infant: parseNum(row[9]),
+        adult: parseNum(row[6]), // Column G
+        child: parseNum(row[7]), // Column H
+        infant: parseNum(row[8]), // Column I
 
         // SP info
-        flightSp: parseNum(row[38]),
-        hotelSp: parseNum(row[39]),
-        landSp: parseNum(row[40]),
-        visaSp: parseNum(row[41]),
-        finalTtv: parseNum(row[42]),
-        totalSp: parseNum(row[34]),
+        flightSp: parseNum(row[37]),
+        hotelSp: parseNum(row[38]),
+        landSp: parseNum(row[39]),
+        visaSp: parseNum(row[40]),
+        totalSp: parseNum(row[33]),
 
-        // Vouchers
-        hotelVoucher: row[28]?.toString()?.trim() || "",
-        landVoucher: row[29]?.toString()?.trim() || "",
-        visaVoucher: row[30]?.toString()?.trim() || "",
-        flightVoucher: row[31]?.toString()?.trim() || "",
-        voucherPending: row[32]?.toString()?.trim() || "",
-        preTrip: row[84]?.toString()?.trim() || "",
-        daysToTravel: row[93]?.toString()?.trim() || "",
-        matrics: row[19]?.toString()?.trim() || "",
+        voucherPending: row[31]?.toString()?.trim() || "",
+        preTrip: row[83]?.toString()?.trim() || "",
+        daysToTravel: row[92]?.toString()?.trim() || "",
         rawData: row.map((cell: any) => cell?.toString() || ""),
       };
     });
