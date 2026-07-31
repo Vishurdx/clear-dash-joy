@@ -188,11 +188,7 @@ export function VoucherReleaseTab({
         const isFuture = td !== null && td >= 0;
 
         const flightVoucherLower = b.flightVoucher?.toLowerCase() || "";
-        const flightIncluded =
-          (b.flightSp ?? 0) > 0 ||
-          (flightVoucherLower !== "" &&
-           flightVoucherLower !== "not applicable" &&
-           flightVoucherLower !== "n/a");
+        const flightIncluded = (b.flightSp ?? 0) > 0;
 
         const hotelVoucherLower = b.hotelVoucher?.toLowerCase() || "";
         const hotelIncluded =
@@ -201,10 +197,7 @@ export function VoucherReleaseTab({
            hotelVoucherLower !== "not applicable" &&
            hotelVoucherLower !== "n/a");
 
-        const flightVoucherShared =
-          flightVoucherLower === "shared" ||
-          flightVoucherLower === "not applicable" ||
-          flightVoucherLower === "n/a";
+        const flightVoucherShared = flightVoucherLower === "shared";
 
         const hotelVoucherShared =
           hotelVoucherLower === "shared" ||
