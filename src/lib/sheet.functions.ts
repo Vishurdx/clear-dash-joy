@@ -266,10 +266,10 @@ export async function fetchBookings(): Promise<{
         seller: row[19]?.toString()?.trim() || "", // Column T
         finalVoucher: row[17]?.toString()?.trim() || "", // Column R
         matrics: row[18]?.toString()?.trim() || "", // Column S (Matrices for DOT)
-        flightVoucher: row[27]?.toString()?.trim() || "", // Column AB
+        flightVoucher: row[30]?.toString()?.trim() || "", // Column AE
         hotelVoucher: row[29]?.toString()?.trim() || "", // Column AD
-        landVoucher: row[30]?.toString()?.trim() || "", // Column AE
-        visaVoucher: row[30]?.toString()?.trim() || "", // Column AE
+        landVoucher: row[28]?.toString()?.trim() || "", // Column AC
+        visaVoucher: row[27]?.toString()?.trim() || "", // Column AB
         finalTtv: parseNum(row[41]), // Column AP
         tripStatus: row[84]?.toString()?.trim() || "",
         firstCallStatus: row[25]?.toString()?.trim() || "",

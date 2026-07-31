@@ -197,7 +197,10 @@ export function VoucherReleaseTab({
            hotelVoucherLower !== "not applicable" &&
            hotelVoucherLower !== "n/a");
 
-        const flightVoucherShared = flightVoucherLower === "shared";
+        const flightVoucherShared =
+          flightVoucherLower === "shared" ||
+          flightVoucherLower === "not applicable" ||
+          flightVoucherLower === "n/a";
 
         const hotelVoucherShared =
           hotelVoucherLower === "shared" ||
