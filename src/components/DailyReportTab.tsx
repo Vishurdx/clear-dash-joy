@@ -265,6 +265,10 @@ export function DailyReportTab({ bookings, isLoading, onSelectBooking, onUpdateC
                                   {b.pn}
                                 </span>
                                 <span className="text-slate-300 shrink-0">|</span>
+                                <span className="text-[10px] bg-orange-100/90 text-orange-800 font-bold px-2 py-0.5 rounded shrink-0 border border-orange-200/80">
+                                  RM: {b.opsRm?.trim() || "Unassigned"}
+                                </span>
+                                <span className="text-slate-300 shrink-0">|</span>
                                 <div className="text-slate-600 flex items-center gap-1.5 flex-wrap">
                                   {focDate && (
                                     <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold mr-1 border border-slate-200/50">

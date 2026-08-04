@@ -34,7 +34,7 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-const OPS_RMS_LOCAL = ["Vishwajeet", "Shruti"];
+const OPS_RMS_LOCAL = ["Niranjana", "Pranav", "Kaviya", "Vishwajeet", "Shruti"];
 const inr = (n: number | undefined) => {
   if (n === undefined || n === null) return "—";
   return n === 0
@@ -367,6 +367,20 @@ function Dashboard() {
     [rows],
   );
 
+  const opsRms = useMemo(() => {
+    const set = new Set<string>(OPS_RMS_LOCAL);
+    rows.forEach((r) => {
+      if (r.opsRm && r.opsRm.trim() && r.opsRm.trim().toLowerCase() !== "unassigned") {
+        const val = r.opsRm.trim();
+        const existing = Array.from(set).find((item) => item.toLowerCase() === val.toLowerCase());
+        if (!existing) {
+          set.add(val);
+        }
+      }
+    });
+    return Array.from(set).sort();
+  }, [rows]);
+
   // Global filters applied to ALL tabs (no tab-specific exclusions)
   const globalFiltered = useMemo(() => {
     return rows.filter((b) => {
@@ -382,8 +396,12 @@ function Dashboard() {
       if (destination && b.destination?.trim() !== destination.trim()) return false;
       if (seller && b.seller?.trim() !== seller.trim()) return false;
       if (opsRm) {
-        if (opsRm === "Unassigned" && b.opsRm) return false;
-        if (opsRm !== "Unassigned" && b.opsRm?.trim() !== opsRm.trim()) return false;
+        const bRm = (b.opsRm || "").trim();
+        if (opsRm === "Unassigned") {
+          if (bRm && bRm.toLowerCase() !== "unassigned") return false;
+        } else {
+          if (bRm.toLowerCase() !== opsRm.trim().toLowerCase()) return false;
+        }
       }
       if (paymentStatus === "full" && !isFullyCollected(b)) return false;
       if (paymentStatus === "pending" && isFullyCollected(b)) return false;
@@ -427,7 +445,7 @@ function Dashboard() {
       const d = daysUntil(b.travelDate);
       return d !== null && d >= 0 && d <= 14;
     }).length;
-    const unassigned = filtered.filter((b) => !b.opsRm || !OPS_RMS_LOCAL.includes(b.opsRm)).length;
+    const unassigned = filtered.filter((b) => !b.opsRm || b.opsRm.trim().toLowerCase() === "unassigned").length;
     return { total: filtered.length, finalTtv, pending, fully, le14, unassigned };
   }, [filtered]);
 
@@ -544,7 +562,7 @@ function Dashboard() {
             />
             <Select value={destination} onChange={setDestination} placeholder="All destinations" options={destinations} />
             <Select value={seller} onChange={setSeller} placeholder="All sellers" options={sellers} />
-            <Select value={opsRm} onChange={setOpsRm} placeholder="All Ops RM" options={["Unassigned", ...OPS_RMS_LOCAL]} />
+            <Select value={opsRm} onChange={setOpsRm} placeholder="All Ops RM" options={["Unassigned", ...opsRms]} />
             <Select
               value={paymentStatus}
               onChange={setPaymentStatus}

@@ -97,7 +97,7 @@ const VISIBLE_COLUMNS: VisibleColumnDef[] = [
     label: "Ops RM", 
     sheetIndex: 12, 
     type: "select", 
-    options: ["Vishwajeet", "Shruti"] 
+    options: ["Niranjana", "Pranav", "Kaviya", "Vishwajeet", "Shruti"] 
   },
   { 
     key: "Destination", 
