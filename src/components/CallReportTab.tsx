@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { type Booking } from "@/lib/sheet.functions";
+import { type Booking, parseSheetDate } from "@/lib/sheet.functions";
 import {
   Dialog,
   DialogContent,
@@ -17,24 +17,14 @@ import {
   Square
 } from "lucide-react";
 
-// Safe date parsing helper
+// Safe date parsing helper using parseSheetDate
 function parseDate(dateStr: string | undefined | null): Date | null {
-  if (!dateStr) return null;
-  const parts = dateStr.split("/");
-  if (parts.length === 3) {
-    const month = parseInt(parts[0], 10) - 1;
-    const day = parseInt(parts[1], 10);
-    const year = parseInt(parts[2], 10);
-    const d = new Date(year, month, day);
-    if (!isNaN(d.getTime())) return d;
-  }
-  const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? null : d;
+  return parseSheetDate(dateStr);
 }
 
 // Compare if a date is on or after July 3, 2026
 function isCreatedOnOrAfterJuly3_2026(createdDateStr: string | undefined): boolean {
-  const createdDate = parseDate(createdDateStr);
+  const createdDate = parseSheetDate(createdDateStr);
   if (!createdDate) return false;
   
   createdDate.setHours(0, 0, 0, 0);

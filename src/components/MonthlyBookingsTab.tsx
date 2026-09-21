@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { type Booking, daysUntil, inr } from "@/lib/sheet.functions";
+import { type Booking, daysUntil, inr, parseSheetDate } from "@/lib/sheet.functions";
 import { Calendar, DollarSign, CreditCard, Users, CheckCircle2, User } from "lucide-react";
 
 export function MonthlyBookingsTab({
@@ -18,8 +18,8 @@ export function MonthlyBookingsTab({
     for (const b of bookings) {
       const dateToUse = b.createdDate || b.travelDate;
       if (!dateToUse) continue;
-      const d = new Date(dateToUse);
-      if (isNaN(d.getTime())) continue;
+      const d = parseSheetDate(dateToUse);
+      if (!d) continue;
       
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       if (!monthsMap[key]) {
@@ -59,15 +59,15 @@ export function MonthlyBookingsTab({
       .filter((b) => {
         const dateToUse = b.createdDate || b.travelDate;
         if (!dateToUse) return false;
-        const d = new Date(dateToUse);
-        if (isNaN(d.getTime())) return false;
+        const d = parseSheetDate(dateToUse);
+        if (!d) return false;
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         return key === selectedMonthKey;
       })
       .sort((a, b) => {
-        const dateA = new Date(a.createdDate || a.travelDate).getTime();
-        const dateB = new Date(b.createdDate || b.travelDate).getTime();
-        return dateA - dateB;
+        const timeA = parseSheetDate(a.createdDate || a.travelDate)?.getTime() ?? 0;
+        const timeB = parseSheetDate(b.createdDate || b.travelDate)?.getTime() ?? 0;
+        return timeA - timeB;
       });
   }, [bookings, selectedMonthKey]);
 

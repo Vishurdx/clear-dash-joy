@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { type Booking, inr } from "@/lib/sheet.functions";
+import { type Booking, inr, parseSheetDate } from "@/lib/sheet.functions";
 import { Calendar, AlertCircle, DollarSign, Edit, User, MapPin, Tag, RefreshCw } from "lucide-react";
 
 interface DailyReportTabProps {
@@ -75,13 +75,13 @@ function InlineCommentInput({
 }
 
 export function DailyReportTab({ bookings, isLoading, onSelectBooking, onUpdateComment }: DailyReportTabProps) {
-  // 1. Generate the list of dates from yesterday (-1 offset) to today + 30 days (offset 30)
+  // 1. Generate the list of dates from yesterday (-1 offset) to today + 60 days (offset 60)
   const dateList = useMemo(() => {
     const list = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    for (let i = -1; i <= 30; i++) {
+    for (let i = -1; i <= 60; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       list.push({
@@ -107,8 +107,8 @@ export function DailyReportTab({ bookings, isLoading, onSelectBooking, onUpdateC
           return false;
         }
 
-        const tDate = new Date(b.travelDate);
-        if (isNaN(tDate.getTime())) return false;
+        const tDate = parseSheetDate(b.travelDate);
+        if (!tDate) return false;
         
         const compareDate = new Date(dateItem.date);
         compareDate.setHours(0, 0, 0, 0);
@@ -157,8 +157,8 @@ export function DailyReportTab({ bookings, isLoading, onSelectBooking, onUpdateC
   // Helper to format FOC Date as D MMM
   const formatFocDate = (dateStr: string | undefined | null) => {
     if (!dateStr) return "";
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return "";
+    const d = parseSheetDate(dateStr);
+    if (!d) return "";
     return d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
   };
 

@@ -68,32 +68,84 @@ export type Booking = {
 };
 
 /**
+ * Safely parse date strings from Google Sheet.
+ * Handles DD/MM/YY (Indian format default), DD/MM/YYYY, M/D/YYYY, YYYY-MM-DD, etc.
+ */
+export function parseSheetDate(dateStr: string | undefined | null): Date | null {
+  if (!dateStr || typeof dateStr !== "string") return null;
+  const str = dateStr.trim();
+  if (!str || str === "-" || str === "—") return null;
+
+  // 1. ISO format YYYY-MM-DD or YYYY/MM/DD
+  let match = str.match(/^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})/);
+  if (match) {
+    const y = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10) - 1;
+    const d = parseInt(match[3], 10);
+    const dt = new Date(y, m, d);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // 2. Format: p1/p2/p3 where p3 is 2 or 4 digit year
+  match = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})/);
+  if (match) {
+    const p1 = parseInt(match[1], 10);
+    const p2 = parseInt(match[2], 10);
+    let y = parseInt(match[3], 10);
+    if (y < 100) y += 2000;
+
+    // If 2-digit year (e.g. 23/09/26 -> 23 Sept 2026), format is DD/MM/YY
+    if (match[3].length === 2) {
+      const dt = new Date(y, p2 - 1, p1);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+
+    // If 4-digit year (e.g. 2026):
+    // If p1 > 12 -> DD/MM/YYYY (e.g., 24/02/2026)
+    // If p2 > 12 -> MM/DD/YYYY (e.g., 2/25/2026)
+    if (p1 > 12) {
+      const dt = new Date(y, p2 - 1, p1);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+    if (p2 > 12) {
+      const dt = new Date(y, p1 - 1, p2);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+
+    // Default DD/MM/YYYY for Indian sheet format
+    const dt = new Date(y, p2 - 1, p1);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // 3. Fallback to standard Date.parse
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
  * Helper: Calculate the number of days from today until the given date string.
  * Returns `null` if the date cannot be parsed.
  */
 export function daysUntil(dateStr: string | undefined | null): number | null {
   if (!dateStr) return null;
-  const target = new Date(dateStr);
-  if (isNaN(target.getTime())) return null;
+  const target = parseSheetDate(dateStr);
+  if (!target) return null;
   const today = new Date();
-  // Reset time components to ignore time-of-day differences
   today.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
   const diffMs = target.getTime() - today.getTime();
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  return diffDays;
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
 export function daysSince(dateStr: string | undefined | null): number | null {
   if (!dateStr) return null;
-  const target = new Date(dateStr);
-  if (isNaN(target.getTime())) return null;
+  const target = parseSheetDate(dateStr);
+  if (!target) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
   const diffMs = today.getTime() - target.getTime();
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  return diffDays;
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -163,8 +215,8 @@ export function getEffectiveFoc(b: {
   const inst2Received = isInstallmentSettled(b.installment2Status);
 
   if (inst2Received && b.travelDate) {
-    const tDate = new Date(b.travelDate);
-    if (!isNaN(tDate.getTime())) {
+    const tDate = parseSheetDate(b.travelDate);
+    if (tDate) {
       const focDate = new Date(tDate);
       focDate.setDate(focDate.getDate() - 10);
       const m = focDate.getMonth() + 1;
