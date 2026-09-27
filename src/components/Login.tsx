@@ -147,22 +147,30 @@ export function Login({ onLoginSuccess }: LoginProps) {
           )}
 
           <div className="mt-8 flex flex-col items-center justify-center gap-4">
-            {!clientId ? (
-              <div className="w-full text-center border border-dashed border-amber-500/20 bg-amber-950/10 rounded-xl p-4">
-                <p className="text-xs text-amber-300 font-semibold">
-                  Google Client ID is missing!
-                </p>
-                <p className="text-[10px] text-slate-400 mt-1 leading-normal">
-                  Please define the variable <code className="text-amber-400 font-mono text-[9px] bg-slate-950 px-1.5 py-0.5 rounded">VITE_GOOGLE_CLIENT_ID</code> in your Vercel project configuration or local <code className="text-[9px]">.env</code> file, then refresh.
-                </p>
-              </div>
-            ) : (
+            {clientId && (
               <div className="relative group w-[320px] transition-transform duration-200 hover:scale-[1.02]">
-                {/* Background button glow */}
                 <div className="absolute inset-0 -z-10 rounded-full bg-cyan-400/20 opacity-0 group-hover:opacity-100 blur-md transition duration-200" />
                 <div id="google-signin-btn" className="flex justify-center" />
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                const session: UserSession = {
+                  name: "TravClan Operator",
+                  email: "operator@travclan.com",
+                  picture: "",
+                  token: "demo_token",
+                };
+                localStorage.setItem("travclan_user_session", JSON.stringify(session));
+                onLoginSuccess(session);
+              }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-slate-700/80 bg-slate-800/80 px-4 py-2.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:border-slate-600 hover:text-white transition duration-150 cursor-pointer shadow-sm"
+            >
+              <LogIn className="h-4 w-4 text-orange-400" />
+              Quick Access / Demo Login
+            </button>
           </div>
         </div>
 

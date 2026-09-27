@@ -101,13 +101,15 @@ export function PaymentTrackerTab({
       }
 
       const travelDays = daysUntil(b.travelDate);
-      if (travelDays === null || travelDays <= 1) {
+      if (travelDays === null || travelDays < 0) {
         return false;
       }
 
       const inst2Settled = isInstallmentSettled(b.installment2Status);
       const inst3Settled = isInstallmentSettled(b.installment3Status);
-      const isPaid = b.paymentCollected?.toLowerCase() === "yes" || (b.pendingAmount ?? 0) === 0;
+      const isPaid =
+        (b.paymentCollected?.toLowerCase() ?? "") === "yes" ||
+        (b.pendingAmount !== undefined && b.pendingAmount <= 0 && (inst2Settled && inst3Settled));
 
       // If the relevant installments are settled or payment fully collected, it shouldn't show
       if (isPaid || (inst2Settled && inst3Settled)) {

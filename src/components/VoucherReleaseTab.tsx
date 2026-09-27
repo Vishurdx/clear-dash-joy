@@ -214,9 +214,10 @@ export function VoucherReleaseTab({
         const inst2Received = isInstallmentSettled(b.installment2Status);
         const inst3Received = isInstallmentSettled(b.installment3Status);
         
-        // Final Payment Collected = pending amount (column BS) is 0
-        const pendingAmt = b.pendingAmount ?? 0;
-        const finalPaymentCollected = pendingAmt === 0;
+        // Final Payment Collected check
+        const finalPaymentCollected =
+          (b.paymentCollected?.toLowerCase() ?? "") === "yes" ||
+          (b.pendingAmount !== undefined && b.pendingAmount <= 0 && (inst2Received || inst3Received));
 
         // Eligibility rules
         const isFlightEligible = flightIncluded && inst1Received && !flightVoucherShared;

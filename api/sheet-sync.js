@@ -13,6 +13,26 @@ export default async function handler(req, res) {
     return;
   }
 
+  if (req.method === "GET") {
+    const SHEET_CSV_URL =
+      "https://docs.google.com/spreadsheets/d/18RQr7HBcjye3bZy8ec4j5YeFcYIgXChFnfZr2-w_Dr0/export?format=csv&gid=0";
+
+    try {
+      const googleResponse = await fetch(SHEET_CSV_URL);
+      if (!googleResponse.ok) {
+        throw new Error(`Google Sheet returned status ${googleResponse.status}`);
+      }
+      const csvText = await googleResponse.text();
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.status(200).send(csvText);
+      return;
+    } catch (err) {
+      console.error("Sheet CSV fetch proxy error:", err);
+      res.status(500).json({ status: "error", message: err.toString() });
+      return;
+    }
+  }
+
   if (req.method !== "POST") {
     res.status(405).json({ status: "error", message: "Method not allowed" });
     return;
@@ -45,3 +65,4 @@ export default async function handler(req, res) {
     res.status(500).json({ status: "error", message: err.toString() });
   }
 }
+

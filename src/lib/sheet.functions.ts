@@ -94,26 +94,14 @@ export function parseSheetDate(dateStr: string | undefined | null): Date | null 
     let y = parseInt(match[3], 10);
     if (y < 100) y += 2000;
 
-    // If 2-digit year (e.g. 23/09/26 -> 23 Sept 2026), format is DD/MM/YY
-    if (match[3].length === 2) {
-      const dt = new Date(y, p2 - 1, p1);
-      return isNaN(dt.getTime()) ? null : dt;
-    }
-
-    // If 4-digit year (e.g. 2026):
-    // If p1 > 12 -> DD/MM/YYYY (e.g., 24/02/2026)
-    // If p2 > 12 -> MM/DD/YYYY (e.g., 2/25/2026)
+    // If p1 > 12 -> DD/MM/YYYY (e.g. 24/02/2026 = 24 Feb 2026)
     if (p1 > 12) {
       const dt = new Date(y, p2 - 1, p1);
       return isNaN(dt.getTime()) ? null : dt;
     }
-    if (p2 > 12) {
-      const dt = new Date(y, p1 - 1, p2);
-      return isNaN(dt.getTime()) ? null : dt;
-    }
 
-    // Default DD/MM/YYYY for Indian sheet format
-    const dt = new Date(y, p2 - 1, p1);
+    // Default Google Sheet CSV Export format is MM/DD/YYYY (e.g. 2/11/2026 = Feb 11, 2026)
+    const dt = new Date(y, p1 - 1, p2);
     return isNaN(dt.getTime()) ? null : dt;
   }
 
@@ -245,7 +233,7 @@ export function inr(amount: number | undefined): string {
 
 /**
  * Fetches the CSV from Google Sheets, parses it, and returns a list of bookings.
- * Runs in the browser — requires the sheet to be publicly shared.
+ * Runs in the browser with 3-tier fallback (serverless proxy, direct fetch, local asset).
  */
 export async function fetchBookings(): Promise<{
   rows: Booking[];
@@ -253,11 +241,38 @@ export async function fetchBookings(): Promise<{
   uniqueValues: Record<string, string[]>;
   fetchedAt: string;
 }> {
-  const resp = await fetch(SHEET_CSV_URL);
-  if (!resp.ok) {
-    throw new Error(`Failed to fetch sheet CSV: ${resp.status}`);
+  let csvText = "";
+
+  // Tier 1: Try Vercel Serverless proxy if deployed (bypasses browser CORS completely)
+  try {
+    const proxyResp = await fetch("/api/sheet-sync");
+    if (proxyResp.ok) {
+      csvText = await proxyResp.text();
+    }
+  } catch {
+    // Proxy not available in local dev, ignore
   }
-  const csvText = await resp.text();
+
+  // Tier 2: Try direct Google Sheet CSV export URL
+  if (!csvText) {
+    try {
+      const resp = await fetch(SHEET_CSV_URL);
+      if (resp.ok) {
+        csvText = await resp.text();
+      }
+    } catch (e) {
+      console.warn("Direct fetch from Google Sheet failed (CORS or network), falling back to /sheet.csv:", e);
+    }
+  }
+
+  // Tier 3: Fallback to bundled /sheet.csv static asset
+  if (!csvText) {
+    const fallbackResp = await fetch("/sheet.csv");
+    if (!fallbackResp.ok) {
+      throw new Error(`Failed to fetch sheet CSV: ${fallbackResp.status}`);
+    }
+    csvText = await fallbackResp.text();
+  }
 
   const parsed = Papa.parse(csvText, {
     header: false,

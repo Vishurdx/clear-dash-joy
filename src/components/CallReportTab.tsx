@@ -43,12 +43,10 @@ export function CallReportTab({
   isLoading: boolean;
   onToggleCallStatus: (booking: Booking, taskNumber: number, completed: boolean) => void;
 }) {
-  // 1. Filter bookings: only created on or after July 3, 2026, and exclude dropped ones
+  // Filter bookings: exclude dropped bookings
   const activeBookings = useMemo(() => {
     return bookings.filter(
-      (b) =>
-        isCreatedOnOrAfterJuly3_2026(b.createdDate) &&
-        (!b.tripStatus || !b.tripStatus.toLowerCase().includes("dropped"))
+      (b) => !b.tripStatus || !b.tripStatus.toLowerCase().includes("dropped")
     );
   }, [bookings]);
 

@@ -47,7 +47,7 @@ export function MonthlyBookingsTab({
       if (hasCurrent) {
         setSelectedMonthKey(currentKey);
       } else {
-        setSelectedMonthKey(monthsList[0].key);
+        setSelectedMonthKey(monthsList[monthsList.length - 1].key);
       }
     }
   }, [monthsList, selectedMonthKey]);
